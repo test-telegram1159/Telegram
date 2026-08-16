@@ -18,6 +18,7 @@ workflows:
           include: true
 
     scripts:
+
       - name: Submodules
         script: |
           git submodule update --init --recursive --depth=1 || true
@@ -37,13 +38,22 @@ workflows:
       - name: AUTO inject Gift Menu
         script: |
           cd "$CM_BUILD_DIR"
+
+          echo "===== RUNNING GIFT MENU INJECTOR ====="
+
           python3 test.py
+
+          echo "===== GIFT MENU INJECTOR FINISHED ====="
 
       - name: Build APK
         script: |
           cd "$CM_BUILD_DIR"
+
           chmod +x ./gradlew
+
           mkdir -p build_logs
+
+          echo "===== START BUILD ====="
 
           set +e
 
@@ -56,9 +66,14 @@ workflows:
 
           set -e
 
+          echo ""
+          echo "===== BUILD FINISHED ====="
+          echo "BUILD STATUS: $STATUS"
+
           {
             echo "===== BUILD STATUS: $STATUS ====="
             echo ""
+
             echo "===== FAILURE / What went wrong ====="
 
             grep -n -A 30 -E \
@@ -67,47 +82,72 @@ workflows:
               | head -n 120 || true
 
             echo ""
+
             echo "===== LAST 80 LINES ====="
 
             tail -n 80 build_logs/full_build.log
 
           } > build_logs/error_summary.txt
 
-          echo "----- error_summary.txt -----"
+          echo ""
+          echo "===== error_summary.txt ====="
+
           cat build_logs/error_summary.txt
 
           exit $STATUS
 
-      - name: Prepare APK artifacts
+      - name: Find and Prepare APK
         script: |
           cd "$CM_BUILD_DIR"
 
+          echo "========================================"
+          echo "        SEARCHING FOR APK FILES"
+          echo "========================================"
+
           mkdir -p artifacts
 
-          echo "===== SEARCHING FOR APK ====="
+          rm -f artifacts/*.apk
+          rm -f artifacts/*.aab
+
+          echo ""
+          echo "===== ALL APK/AAB FILES ====="
 
           find "$CM_BUILD_DIR" \
             -type f \
             \( -name "*.apk" -o -name "*.aab" \) \
             -not -path "$CM_BUILD_DIR/artifacts/*" \
-            -print | sort
+            -print | sort || true
 
           echo ""
-          echo "===== COPYING APK FILES ====="
+          echo "========================================"
+          echo "              APK FILES"
+          echo "========================================"
 
           APK_COUNT=0
 
           while IFS= read -r APK; do
+
             if [ -f "$APK" ]; then
+
               APK_COUNT=$((APK_COUNT + 1))
 
               NAME="$(basename "$APK")"
 
-              echo "Found APK: $APK"
-              echo "Copying to artifacts/$NAME"
+              echo ""
+              echo "FOUND APK:"
+              echo "$APK"
+
+              echo ""
+              echo "COPYING:"
+              echo "$APK"
+
+              echo "TO:"
+              echo "artifacts/$NAME"
 
               cp "$APK" "artifacts/$NAME"
+
             fi
+
           done < <(
             find "$CM_BUILD_DIR" \
               -type f \
@@ -116,17 +156,35 @@ workflows:
           )
 
           echo ""
-          echo "===== COPYING AAB FILES ====="
+          echo "========================================"
+          echo "              AAB FILES"
+          echo "========================================"
+
+          AAB_COUNT=0
 
           while IFS= read -r AAB; do
+
             if [ -f "$AAB" ]; then
+
+              AAB_COUNT=$((AAB_COUNT + 1))
+
               NAME="$(basename "$AAB")"
 
-              echo "Found AAB: $AAB"
-              echo "Copying to artifacts/$NAME"
+              echo ""
+              echo "FOUND AAB:"
+              echo "$AAB"
+
+              echo ""
+              echo "COPYING:"
+              echo "$AAB"
+
+              echo "TO:"
+              echo "artifacts/$NAME"
 
               cp "$AAB" "artifacts/$NAME"
+
             fi
+
           done < <(
             find "$CM_BUILD_DIR" \
               -type f \
@@ -135,17 +193,44 @@ workflows:
           )
 
           echo ""
-          echo "===== FINAL ARTIFACTS ====="
+          echo "========================================"
+          echo "          FINAL ARTIFACTS"
+          echo "========================================"
 
           ls -lah artifacts || true
 
           echo ""
           echo "APK COUNT: $APK_COUNT"
+          echo "AAB COUNT: $AAB_COUNT"
+
+          echo ""
+          echo "===== ARTIFACT DIRECTORY ====="
+
+          find artifacts -maxdepth 1 -type f -print 2>/dev/null || true
 
           if [ "$APK_COUNT" -eq 0 ]; then
-            echo "ERROR: APK was not found!"
+
+            echo ""
+            echo "========================================"
+            echo "ERROR: APK WAS NOT FOUND!"
+            echo "========================================"
+
+            echo ""
+            echo "Searching entire project again:"
+
+            find "$CM_BUILD_DIR" \
+              -type f \
+              -name "*.apk" \
+              -print || true
+
             exit 1
+
           fi
+
+          echo ""
+          echo "========================================"
+          echo "       APK SUCCESSFULLY PREPARED"
+          echo "========================================"
 
     artifacts:
       - artifacts/*.apk
