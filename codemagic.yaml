@@ -1,121 +1,59 @@
-# Codemagic CI — сборка форка Telegram (APK)
-# Документация: https://docs.codemagic.io/yaml-quick-start/building-a-native-android-app/
-#
-# Перед первым билдом в Codemagic UI:
-# 1) Подключи репозиторий
-# 2) Code signing → Android keystore (загрузи .jks / .keystore)
-# 3) Environment variables (группа, например telegram_secrets):
-#    - RELEASE_KEY_PASSWORD
-#    - RELEASE_KEY_ALIAS
-#    - RELEASE_STORE_PASSWORD
-#    - (опционально) APP_ID, APP_HASH если не захардкожены в gradle.properties
-
 workflows:
   telegram-apk:
-    name: Telegram Fork APK
+    name: Telegram APK (auto GiftMenu)
     max_build_duration: 120
-    instance_type: mac_mini_m2   # или linux_x2, если хватает ресурсов под NDK
+    instance_type: mac_mini_m2
 
     environment:
       java: 17
-      ndk: r27                     # подстрой под README своего форка (у DrKLO часто 27.x)
+      ndk: r27
       android_signing:
-        - keystore_reference       # имя reference из Codemagic UI (Android code signing)
+        - keystore_reference
       groups:
-        - telegram_secrets         # группа с паролями keystore / API
-      vars:
-        # Имя пакета — замени на свой, если менял applicationId
-        PACKAGE_NAME: "org.telegram.messenger"
+        - telegram_secrets
 
     triggering:
       events:
         - push
-        - pull_request
       branch_patterns:
-        - pattern: main
-          include: true
-        - pattern: master
-          include: true
-        - pattern: develop
+        - pattern: "*"
           include: true
 
     scripts:
       - name: Submodules
         script: |
-          set -e
           git submodule update --init --recursive --depth=1 || true
 
-      - name: local.properties (SDK path)
+      - name: local.properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
 
-      - name: Keystore → TMessagesProj/config
+      - name: Keystore
         script: |
-          set -e
           mkdir -p "$CM_BUILD_DIR/TMessagesProj/config"
-          # Codemagic кладёт keystore в CM_KEYSTORE_PATH после android_signing
           if [ -n "$CM_KEYSTORE_PATH" ] && [ -f "$CM_KEYSTORE_PATH" ]; then
             cp "$CM_KEYSTORE_PATH" "$CM_BUILD_DIR/TMessagesProj/config/release.keystore"
-            echo "Keystore copied to TMessagesProj/config/release.keystore"
-          else
-            echo "WARNING: CM_KEYSTORE_PATH empty — release signing may fail"
           fi
 
-      - name: gradle.properties (signing + optional API)
+      - name: gradle.properties signing
         script: |
-          set -e
-          PROPS="$CM_BUILD_DIR/gradle.properties"
-          # Дописываем/обновляем пароли для release (как ждёт Telegram)
           {
-            echo ""
             echo "RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD:-}"
             echo "RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS:-}"
             echo "RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD:-}"
-          } >> "$PROPS"
-          # Если APP_ID / APP_HASH заданы в secrets — тоже можно прописать:
-          if [ -n "${APP_ID:-}" ]; then
-            echo "APP_ID=$APP_ID" >> "$PROPS"
-          fi
-          if [ -n "${APP_HASH:-}" ]; then
-            echo "APP_HASH=$APP_HASH" >> "$PROPS"
-          fi
-          echo "gradle.properties updated"
+          } >> "$CM_BUILD_DIR/gradle.properties"
 
-      - name: Check GiftMenuMod present
+      - name: AUTO inject Gift Menu (test.py)
         script: |
-          MOD="$CM_BUILD_DIR/TMessagesProj/src/main/java/org/telegram/ui/Gifts/GiftMenuMod.java"
-          if [ -f "$MOD" ]; then
-            echo "OK: GiftMenuMod.java found"
-          else
-            echo "ERROR: GiftMenuMod.java missing at:"
-            echo "  $MOD"
-            exit 1
-          fi
+          cd "$CM_BUILD_DIR"
+          python3 test.py
 
-      - name: Gradle assembleRelease
+      - name: Build APK
         script: |
-          set -e
           cd "$CM_BUILD_DIR"
           chmod +x ./gradlew
-          # Основной модуль Telegram
-          # Если в твоём форке другой task (assembleAfatRelease и т.п.) — замени строку ниже
           ./gradlew :TMessagesProj:assembleRelease --stacktrace --no-daemon
 
     artifacts:
       - TMessagesProj/build/outputs/apk/**/*.apk
       - TMessagesProj/build/outputs/apk/**/*.aab
-      - TMessagesProj/build/outputs/**/mapping.txt
-
-    publishing:
-      email:
-        recipients:
-          - YOUR_EMAIL@example.com
-        notify:
-          success: true
-          failure: true
-      # Раскомментируй, если льёшь в Google Play:
-      # google_play:
-      #   credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-      #   track: internal
-      #   submit_as_draft: true
-      
