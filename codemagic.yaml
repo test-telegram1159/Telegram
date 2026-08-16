@@ -6,34 +6,29 @@ workflows:
     environment:
       java: 17
       ndk: r27
-      android_signing:
-        - keystore_reference
       groups:
         - telegram_secrets
     triggering:
-      events: [push]
+      events:
+        - push
       branch_patterns:
         - pattern: "*"
           include: true
     scripts:
       - name: Submodules
-        script: git submodule update --init --recursive --depth=1 || true
-      - name: local.properties
-        script: echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
-      - name: Keystore
         script: |
-          mkdir -p "$CM_BUILD_DIR/TMessagesProj/config"
-          if [ -n "$CM_KEYSTORE_PATH" ] && [ -f "$CM_KEYSTORE_PATH" ]; then
-            cp "$CM_KEYSTORE_PATH" "$CM_BUILD_DIR/TMessagesProj/config/release.keystore"
-          fi
-      - name: gradle.properties signing
+          git submodule update --init --recursive --depth=1 || true
+      - name: local.properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      - name: gradle.properties
         script: |
           {
-            echo "RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD:-}"
-            echo "RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS:-}"
-            echo "RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD:-}"
+            echo "RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD:-android}"
+            echo "RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS:-androiddebugkey}"
+            echo "RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD:-android}"
           } >> "$CM_BUILD_DIR/gradle.properties"
-      - name: AUTO inject Gift Menu (test.py)
+      - name: AUTO inject Gift Menu
         script: |
           cd "$CM_BUILD_DIR"
           python3 test.py
