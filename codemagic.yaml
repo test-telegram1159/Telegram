@@ -3,7 +3,6 @@ workflows:
     name: Telegram APK (auto GiftMenu)
     max_build_duration: 120
     instance_type: mac_mini_m2
-
     environment:
       java: 17
       ndk: r27
@@ -11,30 +10,22 @@ workflows:
         - keystore_reference
       groups:
         - telegram_secrets
-
     triggering:
-      events:
-        - push
+      events: [push]
       branch_patterns:
         - pattern: "*"
           include: true
-
     scripts:
       - name: Submodules
-        script: |
-          git submodule update --init --recursive --depth=1 || true
-
+        script: git submodule update --init --recursive --depth=1 || true
       - name: local.properties
-        script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
-
+        script: echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
       - name: Keystore
         script: |
           mkdir -p "$CM_BUILD_DIR/TMessagesProj/config"
           if [ -n "$CM_KEYSTORE_PATH" ] && [ -f "$CM_KEYSTORE_PATH" ]; then
             cp "$CM_KEYSTORE_PATH" "$CM_BUILD_DIR/TMessagesProj/config/release.keystore"
           fi
-
       - name: gradle.properties signing
         script: |
           {
@@ -42,18 +33,15 @@ workflows:
             echo "RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS:-}"
             echo "RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD:-}"
           } >> "$CM_BUILD_DIR/gradle.properties"
-
       - name: AUTO inject Gift Menu (test.py)
         script: |
           cd "$CM_BUILD_DIR"
           python3 test.py
-
       - name: Build APK
         script: |
           cd "$CM_BUILD_DIR"
           chmod +x ./gradlew
           ./gradlew :TMessagesProj:assembleRelease --stacktrace --no-daemon
-
     artifacts:
       - TMessagesProj/build/outputs/apk/**/*.apk
       - TMessagesProj/build/outputs/apk/**/*.aab
