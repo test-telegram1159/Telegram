@@ -3,17 +3,20 @@ workflows:
     name: Telegram APK (auto GiftMenu)
     max_build_duration: 120
     instance_type: mac_mini_m2
+
     environment:
       java: 17
       ndk: r27
       groups:
         - telegram_secrets
+
     triggering:
       events:
         - push
       branch_patterns:
         - pattern: "*"
           include: true
+
     scripts:
       - name: Submodules
         script: |
@@ -43,19 +46,31 @@ workflows:
           mkdir -p build_logs
 
           set +e
-          ./gradlew :TMessagesProj:assembleRelease --stacktrace --no-daemon 2>&1 | tee build_logs/full_build.log
+
+          ./gradlew :TMessagesProj:assembleRelease \
+            --stacktrace \
+            --no-daemon \
+            2>&1 | tee build_logs/full_build.log
+
           STATUS=${PIPESTATUS[0]}
+
           set -e
 
-          # Короткая выжимка ошибки (удобно скинуть в чат)
           {
             echo "===== BUILD STATUS: $STATUS ====="
             echo ""
             echo "===== FAILURE / What went wrong ====="
-            grep -n -A 30 -E "FAILURE:|What went wrong:|BUILD FAILED|error:|Execution failed" build_logs/full_build.log | head -n 120 || true
+
+            grep -n -A 30 -E \
+              "FAILURE:|What went wrong:|BUILD FAILED|error:|Execution failed" \
+              build_logs/full_build.log \
+              | head -n 120 || true
+
             echo ""
             echo "===== LAST 80 LINES ====="
+
             tail -n 80 build_logs/full_build.log
+
           } > build_logs/error_summary.txt
 
           echo "----- error_summary.txt -----"
@@ -63,8 +78,77 @@ workflows:
 
           exit $STATUS
 
+      - name: Prepare APK artifacts
+        script: |
+          cd "$CM_BUILD_DIR"
+
+          mkdir -p artifacts
+
+          echo "===== SEARCHING FOR APK ====="
+
+          find "$CM_BUILD_DIR" \
+            -type f \
+            \( -name "*.apk" -o -name "*.aab" \) \
+            -not -path "$CM_BUILD_DIR/artifacts/*" \
+            -print | sort
+
+          echo ""
+          echo "===== COPYING APK FILES ====="
+
+          APK_COUNT=0
+
+          while IFS= read -r APK; do
+            if [ -f "$APK" ]; then
+              APK_COUNT=$((APK_COUNT + 1))
+
+              NAME="$(basename "$APK")"
+
+              echo "Found APK: $APK"
+              echo "Copying to artifacts/$NAME"
+
+              cp "$APK" "artifacts/$NAME"
+            fi
+          done < <(
+            find "$CM_BUILD_DIR" \
+              -type f \
+              -name "*.apk" \
+              -not -path "$CM_BUILD_DIR/artifacts/*"
+          )
+
+          echo ""
+          echo "===== COPYING AAB FILES ====="
+
+          while IFS= read -r AAB; do
+            if [ -f "$AAB" ]; then
+              NAME="$(basename "$AAB")"
+
+              echo "Found AAB: $AAB"
+              echo "Copying to artifacts/$NAME"
+
+              cp "$AAB" "artifacts/$NAME"
+            fi
+          done < <(
+            find "$CM_BUILD_DIR" \
+              -type f \
+              -name "*.aab" \
+              -not -path "$CM_BUILD_DIR/artifacts/*"
+          )
+
+          echo ""
+          echo "===== FINAL ARTIFACTS ====="
+
+          ls -lah artifacts || true
+
+          echo ""
+          echo "APK COUNT: $APK_COUNT"
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: APK was not found!"
+            exit 1
+          fi
+
     artifacts:
-      - TMessagesProj/build/outputs/apk/**/*.apk
-      - TMessagesProj/build/outputs/apk/**/*.aab
+      - artifacts/*.apk
+      - artifacts/*.aab
       - build_logs/full_build.log
       - build_logs/error_summary.txt
