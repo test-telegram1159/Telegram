@@ -7,6 +7,7 @@ workflows:
     environment:
       java: 17
       ndk: r27
+
       groups:
         - telegram_secrets
 
@@ -22,19 +23,25 @@ workflows:
 
       - name: Submodules
         script: |
+          cd "$CM_BUILD_DIR"
+
           git submodule update --init --recursive --depth=1 || true
 
       - name: local.properties
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+          cd "$CM_BUILD_DIR"
+
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: gradle.properties
         script: |
+          cd "$CM_BUILD_DIR"
+
           {
             echo "RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD:-android}"
             echo "RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS:-androiddebugkey}"
             echo "RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD:-android}"
-          } >> "$CM_BUILD_DIR/gradle.properties"
+          } >> gradle.properties
 
       - name: AUTO inject Gift Menu
         script: |
@@ -63,7 +70,7 @@ workflows:
 
           set +e
 
-          ./gradlew :TMessagesProj:assembleRelease \
+          ./gradlew :TMessagesProj_App:assembleAfatRelease \
             --stacktrace \
             --no-daemon \
             2>&1 | tee build_logs/full_build.log
@@ -113,13 +120,12 @@ workflows:
           mkdir -p artifacts
 
           echo ""
-          echo "===== SEARCHING FOR APK ====="
+          echo "===== EXPECTED APK PATH ====="
 
-          find "$CM_BUILD_DIR" \
+          find TMessagesProj_App \
             -type f \
             -name "*.apk" \
-            -not -path "$CM_BUILD_DIR/artifacts/*" \
-            -print | sort || true
+            -print || true
 
           echo ""
           echo "===== COPYING APK ====="
@@ -139,10 +145,7 @@ workflows:
               echo "$APK"
 
               echo ""
-              echo "COPY:"
-              echo "$APK"
-
-              echo "TO:"
+              echo "COPYING TO:"
               echo "$CM_BUILD_DIR/artifacts/$NAME"
 
               cp -f "$APK" \
@@ -151,21 +154,20 @@ workflows:
             fi
 
           done < <(
-            find "$CM_BUILD_DIR" \
+            find "$CM_BUILD_DIR/TMessagesProj_App" \
               -type f \
-              -name "*.apk" \
-              -not -path "$CM_BUILD_DIR/artifacts/*"
+              -name "*.apk"
           )
 
           echo ""
           echo "========================================"
-          echo "             ARTIFACTS"
+          echo "          FINAL ARTIFACTS"
           echo "========================================"
 
           ls -lah "$CM_BUILD_DIR/artifacts" || true
 
           echo ""
-          echo "===== FINAL APK FILES ====="
+          echo "===== APK FILES ====="
 
           find "$CM_BUILD_DIR/artifacts" \
             -maxdepth 1 \
@@ -173,27 +175,26 @@ workflows:
             -name "*.apk" \
             -print || true
 
-          echo ""
-
           if [ "$APK_FOUND" -eq 0 ]; then
 
+            echo ""
             echo "========================================"
-            echo "ERROR: NO APK FOUND"
+            echo "ERROR: APK WAS NOT FOUND"
             echo "========================================"
 
             echo ""
-            echo "Full APK search:"
+            echo "Full TMessagesProj_App directory:"
 
-            find "$CM_BUILD_DIR" \
+            find "$CM_BUILD_DIR/TMessagesProj_App" \
               -type f \
-              -name "*.apk" \
-              -print || true
+              -print | sort || true
 
             exit 1
           fi
 
+          echo ""
           echo "========================================"
-          echo "APK SUCCESSFULLY COPIED"
+          echo "       APK SUCCESSFULLY COPIED"
           echo "========================================"
 
       - name: Collect AAB
@@ -201,6 +202,11 @@ workflows:
           cd "$CM_BUILD_DIR"
 
           echo "===== SEARCHING FOR AAB ====="
+
+          find "$CM_BUILD_DIR/TMessagesProj_App" \
+            -type f \
+            -name "*.aab" \
+            -print || true
 
           while IFS= read -r AAB; do
 
@@ -217,10 +223,9 @@ workflows:
             fi
 
           done < <(
-            find "$CM_BUILD_DIR" \
+            find "$CM_BUILD_DIR/TMessagesProj_App" \
               -type f \
-              -name "*.aab" \
-              -not -path "$CM_BUILD_DIR/artifacts/*"
+              -name "*.aab"
           )
 
           echo ""
