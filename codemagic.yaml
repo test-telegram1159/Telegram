@@ -7,7 +7,6 @@ workflows:
     environment:
       java: 17
       ndk: r27
-
       groups:
         - telegram_secrets
 
@@ -21,11 +20,19 @@ workflows:
 
     scripts:
 
+      # ========================================
+      # SUBMODULES
+      # ========================================
+
       - name: Submodules
         script: |
           cd "$CM_BUILD_DIR"
 
           git submodule update --init --recursive --depth=1 || true
+
+      # ========================================
+      # LOCAL PROPERTIES
+      # ========================================
 
       - name: local.properties
         script: |
@@ -33,15 +40,221 @@ workflows:
 
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: gradle.properties
+      # ========================================
+      # CHECK SIGNING BEFORE BUILD
+      # ========================================
+
+      - name: Validate signing
         script: |
           cd "$CM_BUILD_DIR"
 
-          {
-            echo "RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD:-android}"
-            echo "RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS:-androiddebugkey}"
-            echo "RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD:-android}"
-          } >> gradle.properties
+          echo "========================================"
+          echo "       VALIDATING RELEASE SIGNING"
+          echo "========================================"
+
+          KEYSTORE="$CM_BUILD_DIR/TMessagesProj/config/release.keystore"
+
+          # ----------------------------------------
+          # 1. Проверяем keystore
+          # ----------------------------------------
+
+          echo ""
+          echo "[1/5] Checking release.keystore..."
+
+          if [ ! -f "$KEYSTORE" ]; then
+            echo ""
+            echo "ERROR: release.keystore NOT FOUND!"
+            echo ""
+            echo "Expected:"
+            echo "$KEYSTORE"
+            echo ""
+            echo "Build stopped before Gradle."
+            exit 1
+          fi
+
+          echo "OK: keystore exists."
+
+          # ----------------------------------------
+          # 2. Проверяем пароль keystore
+          # ----------------------------------------
+
+          echo ""
+          echo "[2/5] Checking RELEASE_STORE_PASSWORD..."
+
+          if [ -z "${RELEASE_STORE_PASSWORD:-}" ]; then
+            echo ""
+            echo "ERROR: RELEASE_STORE_PASSWORD is empty!"
+            echo ""
+            echo "Build stopped before Gradle."
+            exit 1
+          fi
+
+          echo "OK: RELEASE_STORE_PASSWORD is set."
+
+          # ----------------------------------------
+          # 3. Читаем keystore
+          # ----------------------------------------
+
+          echo ""
+          echo "[3/5] Reading keystore..."
+
+          KEYTOOL_OUTPUT="$(
+            keytool \
+              -list \
+              -v \
+              -keystore "$KEYSTORE" \
+              -storepass "$RELEASE_STORE_PASSWORD" \
+              2>&1
+          )"
+
+          KEYTOOL_STATUS=$?
+
+          if [ "$KEYTOOL_STATUS" -ne 0 ]; then
+
+            echo ""
+            echo "========================================"
+            echo "ERROR: CANNOT OPEN KEYSTORE"
+            echo "========================================"
+
+            echo ""
+            echo "$KEYTOOL_OUTPUT"
+
+            echo ""
+            echo "Most likely:"
+            echo "- RELEASE_STORE_PASSWORD is wrong"
+            echo "- release.keystore is damaged"
+
+            echo ""
+            echo "Build stopped BEFORE Gradle."
+            exit 1
+          fi
+
+          echo "OK: keystore password is correct."
+
+          # ----------------------------------------
+          # 4. Получаем настоящий alias
+          # ----------------------------------------
+
+          echo ""
+          echo "[4/5] Detecting key alias..."
+
+          ALIAS="$(
+            echo "$KEYTOOL_OUTPUT" \
+              | grep -E "Alias name:" \
+              | head -n 1 \
+              | sed 's/.*Alias name: //' \
+              | tr -d '\r'
+          )"
+
+          if [ -z "$ALIAS" ]; then
+
+            echo ""
+            echo "========================================"
+            echo "ERROR: NO KEY ALIAS FOUND"
+            echo "========================================"
+
+            echo ""
+            echo "Available keystore information:"
+            echo "$KEYTOOL_OUTPUT"
+
+            echo ""
+            echo "Build stopped BEFORE Gradle."
+            exit 1
+          fi
+
+          echo "Detected alias:"
+          echo "$ALIAS"
+
+          # ----------------------------------------
+          # 5. Проверяем пароль ключа
+          # ----------------------------------------
+
+          echo ""
+          echo "[5/5] Checking RELEASE_KEY_PASSWORD..."
+
+          if [ -z "${RELEASE_KEY_PASSWORD:-}" ]; then
+
+            echo ""
+            echo "ERROR: RELEASE_KEY_PASSWORD is empty!"
+            echo ""
+            echo "Build stopped BEFORE Gradle."
+            exit 1
+          fi
+
+          KEY_CHECK="$(
+            keytool \
+              -certreq \
+              -alias "$ALIAS" \
+              -keystore "$KEYSTORE" \
+              -storepass "$RELEASE_STORE_PASSWORD" \
+              -keypass "$RELEASE_KEY_PASSWORD" \
+              -file "$CM_BUILD_DIR/.signing_test.csr" \
+              2>&1
+          )"
+
+          KEY_STATUS=$?
+
+          rm -f "$CM_BUILD_DIR/.signing_test.csr"
+
+          if [ "$KEY_STATUS" -ne 0 ]; then
+
+            echo ""
+            echo "========================================"
+            echo "ERROR: KEY PASSWORD / ALIAS INVALID"
+            echo "========================================"
+
+            echo ""
+            echo "$KEY_CHECK"
+
+            echo ""
+            echo "Detected alias:"
+            echo "$ALIAS"
+
+            echo ""
+            echo "Check:"
+            echo "RELEASE_KEY_PASSWORD"
+
+            echo ""
+            echo "Build stopped BEFORE Gradle."
+            exit 1
+          fi
+
+          echo "OK: key password is correct."
+
+          # ========================================
+          # SIGNING IS VALID
+          # ========================================
+
+          echo ""
+          echo "========================================"
+          echo "       SIGNING VALIDATION PASSED"
+          echo "========================================"
+
+          echo ""
+          echo "Keystore: OK"
+          echo "Store password: OK"
+          echo "Alias: $ALIAS"
+          echo "Key password: OK"
+
+          echo ""
+          echo "Gradle build can start."
+
+          # ========================================
+          # CREATE GRADLE PROPERTIES
+          # ========================================
+
+          cat > "$CM_BUILD_DIR/gradle.properties" <<EOF
+          RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD
+          RELEASE_KEY_ALIAS=$ALIAS
+          RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD
+          EOF
+
+          echo ""
+          echo "gradle.properties prepared."
+
+      # ========================================
+      # GIFT MENU
+      # ========================================
 
       - name: AUTO inject Gift Menu
         script: |
@@ -56,6 +269,10 @@ workflows:
           echo ""
           echo "Gift Menu injection finished."
 
+      # ========================================
+      # BUILD APK
+      # ========================================
+
       - name: Build APK
         script: |
           cd "$CM_BUILD_DIR"
@@ -67,6 +284,10 @@ workflows:
           echo "========================================"
           echo "             BUILD APK"
           echo "========================================"
+
+          echo ""
+          echo "Task:"
+          echo ":TMessagesProj_App:assembleAfatRelease"
 
           set +e
 
@@ -89,9 +310,9 @@ workflows:
             echo "===== FAILURE / WHAT WENT WRONG ====="
 
             grep -n -A 30 -E \
-              "FAILURE:|What went wrong:|BUILD FAILED|error:|Execution failed" \
+              "FAILURE:|What went wrong:|BUILD FAILED|error:|Execution failed|KeytoolException" \
               build_logs/full_build.log \
-              | head -n 120 || true
+              | head -n 160 || true
 
             echo ""
 
@@ -108,6 +329,10 @@ workflows:
 
           exit $STATUS
 
+      # ========================================
+      # COLLECT APK
+      # ========================================
+
       - name: Collect APK
         script: |
           cd "$CM_BUILD_DIR"
@@ -120,12 +345,14 @@ workflows:
           mkdir -p artifacts
 
           echo ""
-          echo "===== EXPECTED APK PATH ====="
+          echo "===== SEARCHING FOR APK ====="
 
-          find TMessagesProj_App \
+          find "$CM_BUILD_DIR/TMessagesProj_App" \
             -type f \
             -name "*.apk" \
-            -print || true
+            -print \
+            | sort \
+            || true
 
           echo ""
           echo "===== COPYING APK ====="
@@ -148,7 +375,8 @@ workflows:
               echo "COPYING TO:"
               echo "$CM_BUILD_DIR/artifacts/$NAME"
 
-              cp -f "$APK" \
+              cp -f \
+                "$APK" \
                 "$CM_BUILD_DIR/artifacts/$NAME"
 
             fi
@@ -167,13 +395,14 @@ workflows:
           ls -lah "$CM_BUILD_DIR/artifacts" || true
 
           echo ""
-          echo "===== APK FILES ====="
+          echo "===== FINAL APK FILES ====="
 
           find "$CM_BUILD_DIR/artifacts" \
             -maxdepth 1 \
             -type f \
             -name "*.apk" \
-            -print || true
+            -print \
+            || true
 
           if [ "$APK_FOUND" -eq 0 ]; then
 
@@ -183,11 +412,13 @@ workflows:
             echo "========================================"
 
             echo ""
-            echo "Full TMessagesProj_App directory:"
+            echo "Full APK search:"
 
-            find "$CM_BUILD_DIR/TMessagesProj_App" \
+            find "$CM_BUILD_DIR" \
               -type f \
-              -print | sort || true
+              -name "*.apk" \
+              -print \
+              || true
 
             exit 1
           fi
@@ -197,16 +428,17 @@ workflows:
           echo "       APK SUCCESSFULLY COPIED"
           echo "========================================"
 
+      # ========================================
+      # COLLECT AAB
+      # ========================================
+
       - name: Collect AAB
         script: |
           cd "$CM_BUILD_DIR"
 
-          echo "===== SEARCHING FOR AAB ====="
-
-          find "$CM_BUILD_DIR/TMessagesProj_App" \
-            -type f \
-            -name "*.aab" \
-            -print || true
+          echo "========================================"
+          echo "             COLLECTING AAB"
+          echo "========================================"
 
           while IFS= read -r AAB; do
 
@@ -214,10 +446,12 @@ workflows:
 
               NAME="$(basename "$AAB")"
 
+              echo ""
               echo "AAB FOUND:"
               echo "$AAB"
 
-              cp -f "$AAB" \
+              cp -f \
+                "$AAB" \
                 "$CM_BUILD_DIR/artifacts/$NAME"
 
             fi
@@ -232,6 +466,10 @@ workflows:
           echo "===== FINAL ARTIFACT DIRECTORY ====="
 
           ls -lah "$CM_BUILD_DIR/artifacts" || true
+
+    # ========================================
+    # ARTIFACTS
+    # ========================================
 
     artifacts:
       - artifacts/*.apk
